@@ -1,9 +1,16 @@
-import Image from 'next/image'
+// import Image from 'next/image';
+import Navbar from '../components/Navbar';
+import './globals.css';
 
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
-      
-    </main>
-  )
+    <>
+      <Navbar />
+      <div className="background">
+        <div className="overlay">
+          <div className="content"></div>
+        </div>
+      </div>
+    </>
+  );
 }
