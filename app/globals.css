@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 /* גוף האתר */
-body {
+/* body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  background-color: #faebd7; /* רקע בצבע בז' */
-}
+  background-color: #faebd7; 
+} */
 
 /* עיצוב Navbar */
 .navbar {
@@ -46,27 +46,26 @@ body {
   background-color: rgba(47, 7, 222, 0.259);
   border-radius: 5px;
 }
-
-/* התמונה עם הצללה אפורה-לבנה */
+/* Container for the blurred background */
 .background {
-  position: relative;
-  width: 100%;
-  height: 100vh;
-  background-image: url("/image/IMG_0619.JPG"); /* שים את הנתיב הנכון לתמונה */
-  background-size: contain; /* התמונה תהיה בגודל טבעי בלי להיחתך */
+  background-image: url('/image/IMG_0619.JPG'); /* Replace with your own image URL */
+  background-size: 9in 13in;
   background-position: center;
   background-repeat: no-repeat;
-  background-color: #fff0f5; /* צבע הרקע */
-}
-
-/* שכבת overlay */
-.overlay {
-  position: absolute;
+  height: 100vh; /* Full height */
+  width: 100vw;
+  filter: blur(10px); /* Adjust the blur level */
+  position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.4); /* שכבה חצי שקופה של אפור */
-  z-index: 0;
-  filter: blur(1px); /* טשטוש קל */
+  z-index: -1; /* Ensures content is on top */
+}
+.card {
+  backdrop-filter: blur(10px); /* Creates the frosted glass effect */
+  background-color: rgba(255, 255, 255, 0.2); /* Translucent background */
+  padding: 20px;
+  border-radius: 15px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Optional shadow for depth */
+  position: relative;
+  z-index: 1;
 }
