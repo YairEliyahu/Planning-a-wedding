@@ -1,25 +1,37 @@
 'use client';
+'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation'; // ייבוא נכון של useRouter
-import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../../firebaseConfig';
-import Navbar from '../../components/Navbar';
+import { useRouter } from 'next/navigation';
 
 const LoginPage = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const router = useRouter(); // יצירת אינסטנס של useRouter בצורה נכונה
+  const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.message || 'Failed to log in');
+      }
+
+      // שמירת ה-JWT ב-localStorage
+      localStorage.setItem('token', data.token);
       console.log('Logged in successfully!');
+
       router.push('/'); // הפנה את המשתמש לעמוד הבית
     } catch (error: any) {
-      setError('Failed to log in: ' + error.message);
+      setError(error.message);
       console.error('Error logging in:', error);
     }
   };

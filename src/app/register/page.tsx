@@ -2,9 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth, db } from '../../firebaseConfig';
-import { doc, setDoc } from 'firebase/firestore';
 import Navbar from '../../components/Navbar';
 
 const RegisterPage = () => {
@@ -22,25 +19,34 @@ const RegisterPage = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
-
-      const userDocRef = doc(db, 'users', user.uid);
-      await setDoc(userDocRef, {
-        fullName,
-        age,
-        gender,
-        location,
-        phone,
-        idNumber,
-        email: user.email,
-        createdAt: new Date(),
+      // שליחת הנתונים ל-API
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          fullName,
+          age,
+          gender,
+          location,
+          phone,
+          idNumber,
+          email,
+          password,
+        }),
       });
 
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to register');
+      }
+
       console.log('Registered successfully!');
-      router.push('/');
+      router.push('/'); // הפניה לעמוד הבית לאחר הרשמה מוצלחת
     } catch (error: any) {
-      setError('Failed to register: ' + error.message);
+      setError(error.message);
       console.error('Error registering:', error);
     }
   };
