@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import bcrypt from 'bcryptjs';
-import connectToDatabase from '../../../dbConnect';
-import User from '../../../models/User'; 
+import connectToDatabase from '../../utils/dbConnect';
+import User from '../../models/User'; 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   await connectToDatabase();

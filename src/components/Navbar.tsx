@@ -1,35 +1,46 @@
 'use client';
 
-import Link from 'next/link';
+import AuthButton from './AuthButton';
+import { useAuth } from '@/contexts/AuthContext';
 
 const Navbar = () => {
+  const { user } = useAuth();
+
   return (
-    <nav style={styles.navbar}>
-      <Link href="/" style={styles.link}>
-        Home
-      </Link>
-      <Link href="/login" style={styles.link}>
-        Login
-      </Link>
-      <Link href="/register" style={styles.link}>
-        Register
-      </Link>
+    <nav style={styles.nav}>
+      <div style={styles.container}>
+        <div style={styles.logo}>Wedding Planner</div>
+        <div style={styles.links}>
+          {user && <span>שלום, {user.fullName}</span>}
+          <AuthButton />
+        </div>
+      </div>
     </nav>
   );
 };
 
 const styles = {
-  navbar: {
-    display: 'flex',
-    justifyContent: 'space-around',
-    padding: '1rem',
-    backgroundColor: '#f8f9fa',
-    borderBottom: '1px solid #ddd',
+  nav: {
+    backgroundColor: '#fff',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    padding: '1rem 0',
   },
-  link: {
-    textDecoration: 'none',
-    color: '#333',
+  container: {
+    maxWidth: '1200px',
+    margin: '0 auto',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '0 1rem',
+  },
+  logo: {
+    fontSize: '1.5rem',
     fontWeight: 'bold',
+  },
+  links: {
+    display: 'flex',
+    gap: '1rem',
+    alignItems: 'center',
   },
 };
 

@@ -18,8 +18,11 @@ const RegisterPage = () => {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+    
     try {
-      // שליחת הנתונים ל-API
+      console.log('Sending registration data...');
+      
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: {
@@ -38,22 +41,23 @@ const RegisterPage = () => {
       });
 
       const data = await response.json();
+      console.log('Registration response:', data);
 
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to register');
+        throw new Error(data.message || 'Registration failed');
       }
 
-      console.log('Registered successfully!');
-      router.push('/'); // הפניה לעמוד הבית לאחר הרשמה מוצלחת
+      console.log('Registration successful!');
+      router.push('/login');
     } catch (error: any) {
-      setError(error.message);
-      console.error('Error registering:', error);
+      console.error('Registration error:', error);
+      setError(error.message || 'An error occurred during registration');
     }
   };
 
   return (
     <div style={styles.container}>
-      <Navbar />
+      
       <h1>Register</h1>
       {error && <p style={styles.error}>{error}</p>}
       <form onSubmit={handleRegister} style={styles.form}>

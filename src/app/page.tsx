@@ -18,7 +18,7 @@ export default function Home() {
         <button>Register</button>
       </Link>
     </div> */}
-      <Navbar /> 
+      
       <div className="background">
         <div className="overlay">
           <div className="content"></div>
