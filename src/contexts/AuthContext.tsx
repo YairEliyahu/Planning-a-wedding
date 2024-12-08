@@ -15,6 +15,7 @@ interface AuthContextType {
   login: (token: string, userData: User) => void;
   logout: () => void;
   isAuthenticated: boolean;
+  updateUserData: (updates: Partial<User>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -24,35 +25,56 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
+  // בדיקת מצב התחברות בטעינה ראשונית
   useEffect(() => {
-    // בדיקת מצב התחברות בטעינה
-    const token = localStorage.getItem('token');
-    const savedUser = localStorage.getItem('user');
-    
-    if (token && savedUser) {
+    const initAuth = () => {
       try {
-        setUser(JSON.parse(savedUser));
+        const token = localStorage.getItem('token');
+        const savedUser = localStorage.getItem('user');
+        
+        if (token && savedUser) {
+          setUser(JSON.parse(savedUser));
+        }
       } catch (error) {
-        console.error('Error parsing user data:', error);
+        console.error('Error initializing auth:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
+      } finally {
+        setIsLoading(false);
       }
-    }
-    
-    setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
-  const login = (token: string, userData: User) => {
-    localStorage.setItem('token', token);
-    localStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData);
-    router.push(`/user/${userData._id}`); // הפניה לעמוד המשתמש
+  const updateUserData = (updates: Partial<User>) => {
+    if (user) {
+      const updatedUser = { ...user, ...updates };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(updatedUser));
+    }
+  };
+
+  const login = async (token: string, userData: User) => {
+    try {
+      setIsLoading(true);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      setUser(userData);
+      router.push(`/user/${userData._id}`);
+    } catch (error) {
+      console.error('Login error:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const logout = () => {
+    setIsLoading(true);
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     setUser(null);
+    setIsLoading(false);
     router.push('/');
   };
 
@@ -62,7 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isLoading,
       login,
       logout,
-      isAuthenticated: !!user
+      isAuthenticated: !!user,
+      updateUserData
     }}>
       {children}
     </AuthContext.Provider>
