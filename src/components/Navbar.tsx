@@ -13,6 +13,12 @@ const Navbar = () => {
     router.push('/');
   };
 
+  const handleProfileClick = () => {
+    if (user) {
+      router.push(`/user/${user._id}`);
+    }
+  };
+
   return (
     <nav style={styles.nav}>
       <div style={styles.container}>
@@ -27,34 +33,37 @@ const Navbar = () => {
           <Link href="/about" style={styles.link}>
             אודות
           </Link>
+        </div>
 
-          <div style={styles.authButtons}>
-            {user ? (
-              <>
-                <span style={styles.welcomeText}>
-                  שלום, {user.fullName}
-                </span>
-                <Link href={`/user/${user._id}`} style={styles.button}>
-                  הפרופיל שלי
-                </Link>
-                <button 
-                  onClick={handleLogout} 
-                  style={{ ...styles.button, ...styles.logoutButton }}
-                >
-                  התנתק
-                </button>
-              </>
-            ) : (
-              <>
-                <Link href="/login" style={styles.button}>
-                  התחבר
-                </Link>
-                <Link href="/register" style={{ ...styles.button, ...styles.registerButton }}>
-                  הרשמה
-                </Link>
-              </>
-            )}
-          </div>
+        <div style={styles.authButtons}>
+          {user ? (
+            <>
+              <span style={styles.welcomeText}>
+                שלום, {user.fullName}
+              </span>
+              <button 
+                onClick={handleProfileClick} 
+                style={{ ...styles.button, ...styles.profileButton }}
+              >
+                הפרופיל שלי
+              </button>
+              <button 
+                onClick={handleLogout} 
+                style={{ ...styles.button, ...styles.logoutButton }}
+              >
+                התנתק
+              </button>
+            </>
+          ) : (
+            <>
+              <Link href="/login" style={styles.button}>
+                התחבר
+              </Link>
+              <Link href="/register" style={{ ...styles.button, ...styles.registerButton }}>
+                הרשמה
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </nav>
@@ -73,7 +82,7 @@ const styles = {
   container: {
     maxWidth: '1200px',
     margin: '0 auto',
-    padding: '1rem',
+    padding: '1rem 2rem',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -83,18 +92,17 @@ const styles = {
     fontWeight: 'bold',
     color: '#333',
     textDecoration: 'none',
-    fontFamily: 'Arial, sans-serif',
   },
   links: {
     display: 'flex',
-    alignItems: 'center',
     gap: '2rem',
+    alignItems: 'center',
   },
   link: {
-    color: '#333',
+    color: '#666',
     textDecoration: 'none',
-    fontWeight: '500',
     fontSize: '1rem',
+    transition: 'color 0.3s ease',
     '&:hover': {
       color: '#0070f3',
     },
@@ -118,12 +126,25 @@ const styles = {
     fontSize: '0.9rem',
     backgroundColor: '#0070f3',
     color: '#fff',
+    transition: 'background-color 0.3s ease',
   },
   logoutButton: {
     backgroundColor: '#dc3545',
+    '&:hover': {
+      backgroundColor: '#c82333',
+    },
   },
   registerButton: {
     backgroundColor: '#28a745',
+    '&:hover': {
+      backgroundColor: '#218838',
+    },
+  },
+  profileButton: {
+    backgroundColor: '#0070f3',
+    '&:hover': {
+      backgroundColor: '#0060df',
+    },
   },
 };
 

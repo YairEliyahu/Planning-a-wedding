@@ -25,7 +25,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
-  // בדיקת מצב התחברות בטעינה ראשונית
   useEffect(() => {
     const initAuth = () => {
       try {
