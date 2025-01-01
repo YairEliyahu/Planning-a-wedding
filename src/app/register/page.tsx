@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Navbar from '../../components/Navbar';
 
 const RegisterPage = () => {
   const [email, setEmail] = useState('');
@@ -14,13 +13,19 @@ const RegisterPage = () => {
   const [phone, setPhone] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
     
     try {
+      if (!email || !password || !fullName) {
+        throw new Error('אנא מלא את כל שדות החובה: אימייל, סיסמה ושם מלא');
+      }
+
       console.log('Sending registration data...');
       
       const response = await fetch('/api/auth/signup', {
@@ -48,29 +53,46 @@ const RegisterPage = () => {
       }
 
       console.log('Registration successful!');
-      router.push('/login');
+      
+      // שומרים את הטוקן
+      if (data.token) {
+        localStorage.setItem('token', data.token);
+        if (data.user) {
+          localStorage.setItem('user', JSON.stringify(data.user));
+        }
+      }
+
+      // מעבירים לדף הבית או לדף השלמת הפרופיל
+      if (data.user?.isProfileComplete) {
+        router.push('/');
+      } else {
+        router.push('/complete-profile');
+      }
+
     } catch (error: any) {
       console.error('Registration error:', error);
-      setError(error.message || 'An error occurred during registration');
+      setError(error.message || 'אירעה שגיאה בתהליך ההרשמה');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
     <div style={styles.container}>
-      
-      <h1>Register</h1>
+      <h1>הרשמה</h1>
       {error && <p style={styles.error}>{error}</p>}
       <form onSubmit={handleRegister} style={styles.form}>
         <input
           type="text"
-          placeholder="Full Name"
+          placeholder="שם מלא *"
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           style={styles.input}
+          required
         />
         <input
           type="number"
-          placeholder="Age"
+          placeholder="גיל"
           value={age}
           onChange={(e) => setAge(e.target.value)}
           style={styles.input}
@@ -80,47 +102,55 @@ const RegisterPage = () => {
           onChange={(e) => setGender(e.target.value)}
           style={styles.input}
         >
-          <option value="">Select Gender</option>
-          <option value="Male">Male</option>
-          <option value="Female">Female</option>
-          <option value="Other">Other</option>
+          <option value="">בחר מגדר</option>
+          <option value="Male">זכר</option>
+          <option value="Female">נקבה</option>
+          <option value="Other">אחר</option>
         </select>
         <input
           type="text"
-          placeholder="Location"
+          placeholder="מיקום"
           value={location}
           onChange={(e) => setLocation(e.target.value)}
           style={styles.input}
         />
         <input
           type="tel"
-          placeholder="Phone Number"
+          placeholder="מספר טלפון"
           value={phone}
           onChange={(e) => setPhone(e.target.value)}
           style={styles.input}
         />
         <input
           type="text"
-          placeholder="ID Number"
+          placeholder="מספר תעודת זהות"
           value={idNumber}
           onChange={(e) => setIdNumber(e.target.value)}
           style={styles.input}
         />
         <input
           type="email"
-          placeholder="Email"
+          placeholder="אימייל *"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           style={styles.input}
+          required
         />
         <input
           type="password"
-          placeholder="Password"
+          placeholder="סיסמה *"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           style={styles.input}
+          required
         />
-        <button type="submit" style={styles.button}>Register</button>
+        <button 
+          type="submit" 
+          style={styles.button}
+          disabled={isLoading}
+        >
+          {isLoading ? 'מבצע רישום...' : 'הרשמה'}
+        </button>
       </form>
     </div>
   );
@@ -154,6 +184,7 @@ const styles = {
   },
   error: {
     color: 'red',
+    marginBottom: '1rem',
   },
 };
 

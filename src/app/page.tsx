@@ -3,6 +3,9 @@ import './globals.css';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 const styles = {
   container: {
@@ -56,27 +59,27 @@ const styles = {
     fontWeight: 'bold',
     marginBottom: '1rem',
     textShadow: '2px 2px 4px rgba(0, 0, 0, 0.3)',
-    position : 'relative',
-    top : '50%',
-    left : '50%',
-    transform : 'translate(-50%, -50%)',
+    position: 'relative',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
   },
   subtitle: {
     fontSize: '1.3rem',
     marginBottom: '2rem',
     textShadow: '1px 1px 2px rgba(0, 0, 0, 0.3)',
-    position : 'relative',
-    top : '-40px',
-    left : '50%',
-    transform : 'translate(-50%, -50%)',
+    position: 'relative',
+    top: '-40px',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
   },
   ctaButtons: {
     display: 'flex',
     gap: '1rem',
     justifyContent: 'center',
     marginTop: '2rem',
-    position : 'relative',
-    top : '50px',
+    position: 'relative',
+    top: '50px',
   },
   primaryButton: {
     backgroundColor: '#0070f3',
@@ -130,8 +133,48 @@ const styles = {
 };
 
 export default function HomePage() {
+  const { login, user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        const token = searchParams?.get('token');
+        const userJson = searchParams?.get('user');
+        
+        if (token && userJson) {
+          const userData = JSON.parse(userJson);
+          await login(token, userData);
+          
+          // Clean URL parameters
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('token');
+          newUrl.searchParams.delete('user');
+          window.history.replaceState({}, '', newUrl.toString());
+        }
+      } catch (error) {
+        console.error('Error processing user data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeUser();
+  }, [searchParams, login]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
+      <Navbar />
       {/* אזור התמונה המרכזית */}
       <div style={styles.heroSection}>
         <div style={styles.imageWrapper}>
@@ -155,7 +198,10 @@ export default function HomePage() {
             הדרך הקלה לתכנן את החתונה המושלמת
           </p>
           <div style={styles.ctaButtons}>
-            <Link href="/register" style={styles.primaryButton}>
+          <Link 
+              href={isAuthenticated ? `/user/${userId}/wedding` : '/login'} 
+              style={styles.primaryButton}
+            >
               התחל לתכנן
             </Link>
             <Link href="/about" style={styles.secondaryButton}>

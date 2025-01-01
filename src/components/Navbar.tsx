@@ -14,8 +14,12 @@ const Navbar = () => {
   };
 
   const handleProfileClick = () => {
-    if (user) {
+    if (!user) return;
+    
+    if (user.isProfileComplete) {
       router.push(`/user/${user._id}`);
+    } else {
+      router.push('/complete-profile');
     }
   };
 
@@ -43,9 +47,13 @@ const Navbar = () => {
               </span>
               <button 
                 onClick={handleProfileClick} 
-                style={{ ...styles.button, ...styles.profileButton }}
+                style={{ 
+                  ...styles.button, 
+                  ...styles.profileButton,
+                  ...(user.isProfileComplete ? {} : styles.incompleteProfileButton)
+                }}
               >
-                הפרופיל שלי
+                {user.isProfileComplete ? 'הפרופיל שלי' : 'השלם פרופיל'}
               </button>
               <button 
                 onClick={handleLogout} 
@@ -144,6 +152,17 @@ const styles = {
     backgroundColor: '#0070f3',
     '&:hover': {
       backgroundColor: '#0060df',
+    },
+  },
+  profileIncomplete: {
+    color: '#dc3545',
+    fontSize: '0.8rem',
+    marginLeft: '0.5rem',
+  },
+  incompleteProfileButton: {
+    backgroundColor: '#dc3545',
+    '&:hover': {
+      backgroundColor: '#c82333',
     },
   },
 };

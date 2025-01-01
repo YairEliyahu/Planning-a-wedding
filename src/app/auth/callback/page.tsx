@@ -11,25 +11,31 @@ export default function AuthCallback() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('token');
-    const displayName = params.get('displayName');
 
-    if (token && displayName) {
+    if (token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         
-        // שימוש בשם המקורי מה-URL
-        login(token, {
-          ...payload,
-          fullName: decodeURIComponent(displayName)
-        });
-        
+        // שמירת המידע בקונטקסט
+        login(token, payload);
+
+        // הפניה לדף הבית
         router.push('/');
       } catch (error) {
         console.error('Error processing token:', error);
         router.push('/login?error=invalid_token');
       }
+    } else {
+      router.push('/login?error=no_token');
     }
   }, []);
 
-  return <div>מתחבר...</div>;
+  return (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        <p className="mt-4 text-gray-600">מתחבר למערכת...</p>
+      </div>
+    </div>
+  );
 } 

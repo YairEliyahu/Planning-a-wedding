@@ -7,21 +7,45 @@ import { useRouter } from 'next/navigation';
 interface UserProfile {
   _id: string;
   fullName: string;
-  age: number;
-  location: string;
-  phone: string;
   email: string;
+  phoneNumber: string;
+  weddingDate: string;
+  partnerName: string;
+  partnerPhone: string;
+  expectedGuests: string;
+  weddingLocation: string;
+  budget: string;
+  preferences: {
+    venue: boolean;
+    catering: boolean;
+    photography: boolean;
+    music: boolean;
+    design: boolean;
+  };
+  authProvider?: string;
+  profilePicture?: string;
 }
 
 export default function EditProfilePage({ params }: { params: { id: string } }) {
-  const { user, updateUserData } = useAuth();
+  const { user, login } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
-    age: '',
-    location: '',
-    phone: '',
+    phoneNumber: '',
+    weddingDate: '',
+    partnerName: '',
+    partnerPhone: '',
+    expectedGuests: '',
+    weddingLocation: '',
+    budget: '',
+    preferences: {
+      venue: false,
+      catering: false,
+      photography: false,
+      music: false,
+      design: false,
+    }
   });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,12 +54,16 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
   useEffect(() => {
     const checkAuth = async () => {
       if (!user) {
-        const token = localStorage.getItem('token');
-        if (!token) {
-          router.push('/login');
-          return;
-        }
+        router.push('/login');
+        return;
       }
+
+      if (params.id !== user._id) {
+        console.error('User ID mismatch:', { paramsId: params.id, userId: user._id });
+        router.push(`/user/${user._id}/edit`);
+        return;
+      }
+
       await fetchUserProfile();
     };
 
@@ -45,21 +73,43 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
   const fetchUserProfile = async () => {
     try {
       setIsLoading(true);
+      if (!params.id) {
+        throw new Error('No user ID provided');
+      }
+
       const response = await fetch(`/api/user/${params.id}`);
       const data = await response.json();
       
-      if (!response.ok) throw new Error(data.message);
+      if (!response.ok) throw new Error(data.message || 'Failed to fetch user data');
       
-      setProfile(data.user);
+      const userData = data.user;
+      setProfile(userData);
+
+      // עיבוד התאריך לפורמט המתאים לשדה input מסוג date
+      const formattedDate = userData.weddingDate 
+        ? new Date(userData.weddingDate).toISOString().split('T')[0]
+        : '';
+
       setFormData({
-        fullName: data.user.fullName,
-        age: data.user.age.toString(),
-        location: data.user.location,
-        phone: data.user.phone,
+        fullName: userData.fullName || '',
+        phoneNumber: userData.phoneNumber || '',
+        weddingDate: formattedDate,
+        partnerName: userData.partnerName || '',
+        partnerPhone: userData.partnerPhone || '',
+        expectedGuests: userData.expectedGuests || '',
+        weddingLocation: userData.weddingLocation || '',
+        budget: userData.budget || '',
+        preferences: {
+          venue: Boolean(userData.preferences?.venue),
+          catering: Boolean(userData.preferences?.catering),
+          photography: Boolean(userData.preferences?.photography),
+          music: Boolean(userData.preferences?.music),
+          design: Boolean(userData.preferences?.design)
+        }
       });
     } catch (err) {
-      setError('Failed to load profile');
-      console.error(err);
+      console.error('Error fetching user:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load profile');
     } finally {
       setIsLoading(false);
     }
@@ -70,6 +120,16 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
     setFormData(prev => ({
       ...prev,
       [name]: value
+    }));
+  };
+
+  const handlePreferenceChange = (key: keyof typeof formData.preferences) => {
+    setFormData(prev => ({
+      ...prev,
+      preferences: {
+        ...prev.preferences,
+        [key]: !prev.preferences[key]
+      }
     }));
   };
 
@@ -84,119 +144,259 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          fullName: formData.fullName,
-          age: parseInt(formData.age),
-          location: formData.location,
-          phone: formData.phone,
-        }),
+        body: JSON.stringify(formData),
       });
 
       const data = await response.json();
       
-      if (!response.ok) throw new Error(data.message);
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update profile');
+      }
 
-      // עדכון המידע ב-Context
-      if (user) {
-        updateUserData({ ...user, fullName: formData.fullName });
+      // עדכון הטוקן והמשתמש בקונטקסט
+      if (data.token && data.user) {
+        await login(data.token, data.user);
+        
+        // עדכון הפרופיל והטופס עם המידע החדש
+        setProfile(data.user);
+        setFormData({
+          fullName: data.user.fullName || '',
+          phoneNumber: data.user.phoneNumber || '',
+          weddingDate: data.user.weddingDate ? new Date(data.user.weddingDate).toISOString().split('T')[0] : '',
+          partnerName: data.user.partnerName || '',
+          partnerPhone: data.user.partnerPhone || '',
+          expectedGuests: data.user.expectedGuests || '',
+          weddingLocation: data.user.weddingLocation || '',
+          budget: data.user.budget || '',
+          preferences: data.user.preferences || {
+            venue: false,
+            catering: false,
+            photography: false,
+            music: false,
+            design: false,
+          }
+        });
       }
 
       setSuccessMessage('הפרופיל עודכן בהצלחה!');
-      setTimeout(() => setSuccessMessage(''), 3000);
+      
+      // הסרת ההודעה אחרי 3 שניות
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 3000);
     } catch (err) {
       console.error('Update failed:', err);
-      setError('עדכון הפרופיל נכשל');
+      setError(err instanceof Error ? err.message : 'עדכון הפרופיל נכשל');
     }
   };
 
-  if (isLoading) return <div style={styles.container}>Loading...</div>;
-  if (error) return <div style={styles.container}>Error: {error}</div>;
-  if (!profile) return <div style={styles.container}>Profile not found</div>;
+  if (isLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingSpinner}>טוען...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.errorMessage}>{error}</div>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.errorMessage}>הפרופיל לא נמצא</div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>עריכת פרופיל</h1>
-      
-      {successMessage && (
-        <div style={styles.successMessage}>{successMessage}</div>
-      )}
-      
-      {error && (
-        <div style={styles.errorMessage}>{error}</div>
-      )}
+      <div style={styles.content}>
+        <h1 style={styles.title}>עריכת פרופיל</h1>
+        
+        {successMessage && (
+          <div style={styles.successMessage}>{successMessage}</div>
+        )}
+        
+        {error && (
+          <div style={styles.errorMessage}>{error}</div>
+        )}
 
-      <form onSubmit={handleSubmit} style={styles.form}>
-        <div style={styles.fieldContainer}>
-          <label style={styles.label}>שם מלא</label>
-          <input
-            type="text"
-            name="fullName"
-            value={formData.fullName}
-            onChange={handleChange}
-            style={styles.input}
-            required
-          />
-        </div>
+        {profile.authProvider === 'google' && profile.profilePicture && (
+          <div style={styles.profileImageContainer}>
+            <img 
+              src={profile.profilePicture} 
+              alt="Profile" 
+              style={styles.profileImage}
+            />
+          </div>
+        )}
 
-        <div style={styles.fieldContainer}>
-          <label style={styles.label}>גיל</label>
-          <input
-            type="number"
-            name="age"
-            value={formData.age}
-            onChange={handleChange}
-            style={styles.input}
-            required
-          />
-        </div>
+        <form onSubmit={handleSubmit} style={styles.form}>
+          <div style={styles.gridContainer}>
+            {/* Personal Details Section */}
+            <div style={styles.section}>
+              <h3 style={styles.sectionTitle}>פרטים אישיים</h3>
+              
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>שם מלא</label>
+                <input
+                  type="text"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  style={styles.input}
+                  required
+                />
+              </div>
 
-        <div style={styles.fieldContainer}>
-          <label style={styles.label}>מקום מגורים</label>
-          <input
-            type="text"
-            name="location"
-            value={formData.location}
-            onChange={handleChange}
-            style={styles.input}
-            required
-          />
-        </div>
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>טלפון</label>
+                <input
+                  type="tel"
+                  name="phoneNumber"
+                  value={formData.phoneNumber}
+                  onChange={handleChange}
+                  style={styles.input}
+                  required
+                />
+              </div>
 
-        <div style={styles.fieldContainer}>
-          <label style={styles.label}>טלפון</label>
-          <input
-            type="tel"
-            name="phone"
-            value={formData.phone}
-            onChange={handleChange}
-            style={styles.input}
-            required
-          />
-        </div>
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>אימייל</label>
+                <input
+                  type="email"
+                  value={profile.email}
+                  style={{ ...styles.input, backgroundColor: '#f5f5f5' }}
+                  disabled
+                />
+              </div>
+            </div>
 
-        <div style={styles.fieldContainer}>
-          <label style={styles.label}>אימייל</label>
-          <input
-            type="email"
-            value={profile.email}
-            style={{ ...styles.input, backgroundColor: '#f5f5f5' }}
-            disabled
-          />
-        </div>
+            {/* Wedding Details Section */}
+            <div style={styles.section}>
+              <h3 style={styles.sectionTitle}>פרטי החתונה</h3>
+              
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>תאריך החתונה</label>
+                <input
+                  type="date"
+                  name="weddingDate"
+                  value={formData.weddingDate}
+                  onChange={handleChange}
+                  style={styles.input}
+                />
+              </div>
 
-        <button type="submit" style={styles.submitButton}>
-          שמור שינויים
-        </button>
-      </form>
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>שם בן/בת הזוג</label>
+                <input
+                  type="text"
+                  name="partnerName"
+                  value={formData.partnerName}
+                  onChange={handleChange}
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>טלפון בן/בת הזוג</label>
+                <input
+                  type="tel"
+                  name="partnerPhone"
+                  value={formData.partnerPhone}
+                  onChange={handleChange}
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>מספר אורחים משוער</label>
+                <input
+                  type="number"
+                  name="expectedGuests"
+                  value={formData.expectedGuests}
+                  onChange={handleChange}
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>מיקום משוער</label>
+                <input
+                  type="text"
+                  name="weddingLocation"
+                  value={formData.weddingLocation}
+                  onChange={handleChange}
+                  style={styles.input}
+                />
+              </div>
+
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>תקציב משוער</label>
+                <input
+                  type="number"
+                  name="budget"
+                  value={formData.budget}
+                  onChange={handleChange}
+                  style={styles.input}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Preferences Section */}
+          <div style={styles.preferencesSection}>
+            <h3 style={styles.sectionTitle}>שירותים נדרשים</h3>
+            <div style={styles.preferencesGrid}>
+              {Object.entries(formData.preferences).map(([key, value]) => (
+                <label key={key} style={styles.checkboxLabel}>
+                  <input
+                    type="checkbox"
+                    checked={value}
+                    onChange={() => handlePreferenceChange(key as keyof typeof formData.preferences)}
+                    style={styles.checkbox}
+                  />
+                  <span style={styles.checkboxText}>
+                    {key === 'venue' && 'אולם אירועים'}
+                    {key === 'catering' && 'קייטרינג'}
+                    {key === 'photography' && 'צילום'}
+                    {key === 'music' && 'מוזיקה'}
+                    {key === 'design' && 'עיצוב'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <button type="submit" style={styles.submitButton}>
+            שמור שינויים
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
 
 const styles = {
   container: {
-    maxWidth: '800px',
+    maxWidth: '1200px',
     margin: '20px auto',
     padding: '2rem',
+  },
+  content: {
+    backgroundColor: '#fff',
+    padding: '2rem',
+    borderRadius: '8px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  },
+  form: {
+    width: '100%',
   },
   title: {
     fontSize: '2rem',
@@ -204,20 +404,29 @@ const styles = {
     marginBottom: '2rem',
     textAlign: 'center' as const,
   },
-  form: {
-    backgroundColor: '#fff',
-    padding: '2rem',
+  gridContainer: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gap: '2rem',
+    marginBottom: '2rem',
+  },
+  section: {
+    backgroundColor: '#f8f9fa',
+    padding: '1.5rem',
     borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  },
+  sectionTitle: {
+    fontSize: '1.25rem',
+    color: '#333',
+    marginBottom: '1.5rem',
   },
   fieldContainer: {
-    marginBottom: '1.5rem',
+    marginBottom: '1rem',
   },
   label: {
     display: 'block',
     fontSize: '0.9rem',
     color: '#666',
-    fontWeight: '500',
     marginBottom: '0.5rem',
   },
   input: {
@@ -227,10 +436,29 @@ const styles = {
     border: '1px solid #ddd',
     fontSize: '1rem',
     transition: 'border-color 0.3s ease',
-    '&:focus': {
-      outline: 'none',
-      borderColor: '#0070f3',
-    },
+  },
+  preferencesSection: {
+    marginTop: '2rem',
+    backgroundColor: '#f8f9fa',
+    padding: '1.5rem',
+    borderRadius: '8px',
+  },
+  preferencesGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+    gap: '1rem',
+  },
+  checkboxLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    cursor: 'pointer',
+  },
+  checkbox: {
+    marginRight: '0.5rem',
+  },
+  checkboxText: {
+    fontSize: '0.9rem',
+    color: '#666',
   },
   submitButton: {
     backgroundColor: '#0070f3',
@@ -242,11 +470,8 @@ const styles = {
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'background-color 0.3s ease',
-    '&:hover': {
-      backgroundColor: '#0060df',
-    },
     width: '100%',
-    marginTop: '1rem',
+    marginTop: '2rem',
   },
   successMessage: {
     backgroundColor: '#d4edda',
@@ -263,5 +488,20 @@ const styles = {
     borderRadius: '4px',
     marginBottom: '1rem',
     textAlign: 'center' as const,
+  },
+  loadingSpinner: {
+    textAlign: 'center' as const,
+    padding: '2rem',
+  },
+  profileImageContainer: {
+    textAlign: 'center' as const,
+    marginBottom: '2rem',
+  },
+  profileImage: {
+    width: '100px',
+    height: '100px',
+    borderRadius: '50%',
+    objectFit: 'cover' as const,
+    border: '3px solid #0070f3',
   },
 }; 
