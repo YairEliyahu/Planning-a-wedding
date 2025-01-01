@@ -3,6 +3,8 @@ import './globals.css';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+
 
 const styles = {
   container: {
@@ -130,6 +132,18 @@ const styles = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
+  const isAuthenticated = true; // בדיקה אם המשתמש מחובר
+  const userId = 1; // מזהה משתמש מחובר
+
+  const handleStartPlanning = () => {
+    if (isAuthenticated) {
+      router.push(`/user/${userId}/wedding`);
+    } else {
+      router.push('/login');
+    }
+  };
+
   return (
     <div style={styles.container}>
       {/* אזור התמונה המרכזית */}
@@ -155,7 +169,10 @@ export default function HomePage() {
             הדרך הקלה לתכנן את החתונה המושלמת
           </p>
           <div style={styles.ctaButtons}>
-            <Link href="/register" style={styles.primaryButton}>
+            <Link 
+              href={isAuthenticated ? `/user/${userId}/wedding` : '/login'} 
+              style={styles.primaryButton}
+            >
               התחל לתכנן
             </Link>
             <Link href="/about" style={styles.secondaryButton}>
