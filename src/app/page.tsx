@@ -3,6 +3,9 @@ import './globals.css';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
+import { useEffect, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuth } from '@/contexts/AuthContext';
 
 const styles = {
   container: {
@@ -130,6 +133,56 @@ const styles = {
 };
 
 export default function HomePage() {
+  const { login, user } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [isLoading, setIsLoading] = useState(true);
+  const isAuthenticated = true; // בדיקה אם המשתמש מחובר
+  const userId = 1; // מזהה משתמש מחובר
+
+
+
+  useEffect(() => {
+    const initializeUser = async () => {
+      try {
+        const token = searchParams?.get('token');
+        const userJson = searchParams?.get('user');
+        
+        if (token && userJson) {
+          const userData = JSON.parse(userJson);
+          await login(token, userData);
+          
+          // Clean URL parameters
+          const newUrl = new URL(window.location.href);
+          newUrl.searchParams.delete('token');
+          newUrl.searchParams.delete('user');
+          window.history.replaceState({}, '', newUrl.toString());
+        }
+      } catch (error) {
+        console.error('Error processing user data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    const handleStartPlanning = () => {
+      if (isAuthenticated) {
+        router.push(`/user/${userId}/wedding`);
+      } else {
+        router.push('/login');
+      }
+    };
+
+    initializeUser();
+  }, [searchParams, login]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <Navbar />
@@ -156,7 +209,10 @@ export default function HomePage() {
             הדרך הקלה לתכנן את החתונה המושלמת
           </p>
           <div style={styles.ctaButtons}>
-            <Link href="/register" style={styles.primaryButton}>
+          <Link 
+              href={isAuthenticated ? `/user/${userId}/wedding` : '/login'} 
+              style={styles.primaryButton}
+            >
               התחל לתכנן
             </Link>
             <Link href="/about" style={styles.secondaryButton}>

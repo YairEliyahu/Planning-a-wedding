@@ -5,20 +5,96 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
 import Navbar from '@/components/Navbar';
+import { StepItem } from '@/components/step-item';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+
+interface User {
+  _id: string;
+  fullName: string;
+  email: string;
+  age?: string;
+  gender?: string;
+  location?: string;
+  phoneNumber?: string;
+  idNumber?: string;
+  partnerName?: string;
+  partnerEmail?: string;
+  partnerIdNumber?: string;
+  weddingDate?: string;
+  expectedGuests?: string;
+  weddingLocation?: string;
+  budget?: string;
+  preferences?: {
+    venue: boolean;
+    catering: boolean;
+    photography: boolean;
+    music: boolean;
+    design: boolean;
+  };
+  isProfileComplete?: boolean;
+}
+
+interface FormData {
+  // Personal Details
+  fullName: string;
+  email: string;
+  age: string;
+  gender: string;
+  location: string;
+  phoneNumber: string;
+  idNumber: string;
+  
+  // Partner Details
+  partnerName: string;
+  partnerEmail: string;
+  partnerPhone: string;
+  partnerIdNumber: string;
+  
+  // Wedding Details
+  weddingDate: string;
+  expectedGuests: string;
+  weddingLocation: string;
+  budget: string;
+  preferences: {
+    venue: boolean;
+    catering: boolean;
+    photography: boolean;
+    music: boolean;
+    design: boolean;
+  }
+}
 
 export default function CompleteProfile() {
   const { user, login } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isInitializing, setIsInitializing] = useState(true);
-  const [formData, setFormData] = useState({
+  const [currentStep, setCurrentStep] = useState(1);
+  const [formData, setFormData] = useState<FormData>({
+    // Personal Details
+    fullName: user?.fullName || '',
+    email: user?.email || '',
+    age: user?.age || '',
+    gender: user?.gender || '',
+    location: user?.location || '',
     phoneNumber: user?.phoneNumber || '',
-    weddingDate: user?.weddingDate ? new Date(user.weddingDate).toISOString().split('T')[0] : '',
+    idNumber: user?.idNumber || '',
+    
+    // Partner Details
     partnerName: user?.partnerName || '',
+    partnerEmail: user?.partnerEmail || '',
     partnerPhone: user?.partnerPhone || '',
-    expectedGuests: user?.expectedGuests || '',
+    partnerIdNumber: user?.partnerIdNumber || '',
+    
+    // Wedding Details
+    weddingDate: user?.weddingDate ? new Date(user.weddingDate).toISOString().split('T')[0] : '',
+    expectedGuests: user?.expectedGuests?.toString() || '',
     weddingLocation: user?.weddingLocation || '',
-    budget: user?.budget || '',
+    budget: user?.budget?.toString() || '',
     preferences: {
       venue: user?.preferences?.venue || false,
       catering: user?.preferences?.catering || false,
@@ -40,16 +116,24 @@ export default function CompleteProfile() {
           const userData = JSON.parse(userJson);
           await login(token, userData);
           
-          // Initialize form data with user data if available
           if (userData) {
-            setFormData({
+            setFormData(prev => ({
+              ...prev,
+              fullName: userData.fullName || '',
+              email: userData.email || '',
+              age: userData.age || '',
+              gender: userData.gender || '',
+              location: userData.location || '',
               phoneNumber: userData.phoneNumber || '',
-              weddingDate: userData.weddingDate ? new Date(userData.weddingDate).toISOString().split('T')[0] : '',
+              idNumber: userData.idNumber || '',
               partnerName: userData.partnerName || '',
+              partnerEmail: userData.partnerEmail || '',
               partnerPhone: userData.partnerPhone || '',
-              expectedGuests: userData.expectedGuests || '',
+              partnerIdNumber: userData.partnerIdNumber || '',
+              weddingDate: userData.weddingDate ? new Date(userData.weddingDate).toISOString().split('T')[0] : '',
+              expectedGuests: userData.expectedGuests?.toString() || '',
               weddingLocation: userData.weddingLocation || '',
-              budget: userData.budget || '',
+              budget: userData.budget?.toString() || '',
               preferences: {
                 venue: userData.preferences?.venue || false,
                 catering: userData.preferences?.catering || false,
@@ -57,10 +141,9 @@ export default function CompleteProfile() {
                 music: userData.preferences?.music || false,
                 design: userData.preferences?.design || false
               }
-            });
+            }));
           }
           
-          // Clean URL parameters
           const newUrl = new URL(window.location.href);
           newUrl.searchParams.delete('token');
           newUrl.searchParams.delete('user');
@@ -74,7 +157,7 @@ export default function CompleteProfile() {
     };
 
     initializeUser();
-  }, [searchParams, login, user]);
+  }, [searchParams, login]);
 
   useEffect(() => {
     if (!isInitializing && !user) {
@@ -88,7 +171,6 @@ export default function CompleteProfile() {
     setError('');
 
     try {
-      // Format the data before sending
       const formattedData = {
         ...formData,
         weddingDate: formData.weddingDate ? new Date(formData.weddingDate).toISOString() : undefined,
@@ -125,8 +207,11 @@ export default function CompleteProfile() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value, checked } = e.target;
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement> | { target: { name: string; checked: boolean } }
+  ) => {
+    const { name, value, type } = e.target as HTMLInputElement | HTMLSelectElement;
+    const checked = 'checked' in e.target ? e.target.checked : false;
     
     if (name.startsWith('preferences.')) {
       const preference = name.split('.')[1];
@@ -140,9 +225,17 @@ export default function CompleteProfile() {
     } else {
       setFormData(prev => ({
         ...prev,
-        [name]: value
+        [name]: type === 'checkbox' ? checked : value
       }));
     }
+  };
+
+  const nextStep = () => {
+    setCurrentStep(prev => Math.min(prev + 1, 3));
+  };
+
+  const prevStep = () => {
+    setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
   if (isInitializing) {
@@ -154,183 +247,309 @@ export default function CompleteProfile() {
   }
 
   return (
-    <>
+    <div dir="rtl">
       {user?.isProfileComplete && <Navbar />}
       <div className={`min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col items-center ${user?.isProfileComplete ? 'pt-20' : 'justify-center'} py-12 px-4 sm:px-6 lg:px-8`}>
-        <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
-          <div className="text-center">
-            <Image
-              src="/images/logo.png"
-              alt="Logo"
-              width={100}
-              height={100}
-              className="mx-auto mb-4"
-            />
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              השלמת פרטי חתונה
-            </h2>
-            <p className="text-gray-600">
-              נשמח לדעת עוד פרטים על החתונה שלכם
-            </p>
-          </div>
-
-          {error && (
-            <div className="bg-red-50 text-red-500 p-3 rounded-md text-center">
-              {error}
+        <Card className="w-full max-w-4xl shadow-lg">
+          <CardHeader className="border-b">
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="text-2xl font-bold">השלמת פרטי חתונה</CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  נשמח לדעת עוד פרטים על החתונה שלכם
+                </p>
+              </div>
+              <Image
+                src="/images/logo.png"
+                alt="Logo"
+                width={80}
+                height={80}
+                className="mb-4"
+              />
             </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-6">
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  מספר טלפון
-                </label>
-                <input
-                  type="tel"
-                  name="phoneNumber"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.phoneNumber}
-                  onChange={handleChange}
-                  placeholder="הכנס מספר טלפון"
-                  dir="rtl"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  תאריך חתונה
-                </label>
-                <input
-                  type="date"
-                  name="weddingDate"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.weddingDate}
-                  onChange={handleChange}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  שם בן/בת הזוג
-                </label>
-                <input
-                  type="text"
-                  name="partnerName"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.partnerName}
-                  onChange={handleChange}
-                  placeholder="הכנס שם בן/בת הזוג"
-                  dir="rtl"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  טלפון בן/בת הזוג
-                </label>
-                <input
-                  type="tel"
-                  name="partnerPhone"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.partnerPhone}
-                  onChange={handleChange}
-                  placeholder="הכנס מספר טלפון"
-                  dir="rtl"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  מספר אורחים משוער
-                </label>
-                <input
-                  type="number"
-                  name="expectedGuests"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.expectedGuests}
-                  onChange={handleChange}
-                  placeholder="הכנס מספר אורחים משוער"
-                  dir="rtl"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  מיקום החתונה
-                </label>
-                <input
-                  type="text"
-                  name="weddingLocation"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.weddingLocation}
-                  onChange={handleChange}
-                  placeholder="הכנס מיקום משוער"
-                  dir="rtl"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  תקציב משוער
-                </label>
-                <input
-                  type="text"
-                  name="budget"
-                  required
-                  className="appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  value={formData.budget}
-                  onChange={handleChange}
-                  placeholder="הכנס תקציב משוער"
-                  dir="rtl"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  במה תרצו שנעזור לכם?
-                </label>
-                <div className="space-y-2">
-                  {Object.keys(formData.preferences).map((preference) => (
-                    <div key={preference} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        name={`preferences.${preference}`}
-                        checked={formData.preferences[preference as keyof typeof formData.preferences]}
-                        onChange={handleChange}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded ml-2"
-                      />
-                      <label className="text-sm text-gray-700">
-                        {preference === 'venue' && 'אולם אירועים'}
-                        {preference === 'catering' && 'קייטרינג'}
-                        {preference === 'photography' && 'צילום'}
-                        {preference === 'music' && 'מוזיקה'}
-                        {preference === 'design' && 'עיצוב'}
-                      </label>
+          </CardHeader>
+          <CardContent className="grid md:grid-cols-[240px_1fr] gap-8 p-6">
+            <div className="space-y-6 border-l pl-6">
+              <StepItem
+                step={1}
+                label="פרטים אישיים"
+                description="המידע שלך"
+                status={currentStep > 1 ? 'completed' : currentStep === 1 ? 'current' : 'upcoming'}
+              />
+              <StepItem
+                step={2}
+                label="פרטי בן/בת הזוג"
+                description="המידע של בן/בת הזוג"
+                status={currentStep > 2 ? 'completed' : currentStep === 2 ? 'current' : 'upcoming'}
+              />
+              <StepItem
+                step={3}
+                label="פרטי החתונה"
+                description="מידע על האירוע"
+                status={currentStep === 3 ? 'current' : 'upcoming'}
+              />
+            </div>
+            <div className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {currentStep === 1 && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fullName">שם מלא</Label>
+                      <div className="relative">
+                        <Input
+                          id="fullName"
+                          name="fullName"
+                          value={formData.fullName}
+                          onChange={handleChange}
+                          className="text-right"
+                          required
+                        />
+                        {user?.fullName && formData.fullName !== user.fullName && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            שם מקורי מגוגל: {user.fullName}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">אימייל</Label>
+                      <Input
+                        id="email"
+                        name="email"
+                        value={formData.email}
+                        disabled
+                        className="text-right bg-gray-50"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        כתובת האימייל מסונכרנת עם חשבון הגוגל שלך
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="age">גיל</Label>
+                      <Input
+                        id="age"
+                        name="age"
+                        type="number"
+                        value={formData.age}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gender">מגדר</Label>
+                      <select
+                        id="gender"
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        className="w-full p-2 border rounded-md text-right"
+                        required
+                      >
+                        <option value="">בחר מגדר</option>
+                        <option value="male">זכר</option>
+                        <option value="female">נקבה</option>
+                        <option value="other">אחר</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="location">מיקום</Label>
+                      <Input
+                        id="location"
+                        name="location"
+                        value={formData.location}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="phoneNumber">מספר טלפון</Label>
+                      <Input
+                        id="phoneNumber"
+                        name="phoneNumber"
+                        type="tel"
+                        value={formData.phoneNumber}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="idNumber">תעודת זהות</Label>
+                      <Input
+                        id="idNumber"
+                        name="idNumber"
+                        value={formData.idNumber}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
 
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {isLoading ? 'מעדכן...' : 'סיום והמשך'}
-              </button>
+                {currentStep === 2 && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerName">שם בלא</Label>
+                      <Input
+                        id="partnerName"
+                        name="partnerName"
+                        value={formData.partnerName}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerEmail">אימייל</Label>
+                      <Input
+                        id="partnerEmail"
+                        name="partnerEmail"
+                        type="email"
+                        value={formData.partnerEmail}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerPhone">טלפון</Label>
+                      <Input
+                        id="partnerPhone"
+                        name="partnerPhone"
+                        type="tel"
+                        value={formData.partnerPhone}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerIdNumber">תעודת זהות</Label>
+                      <Input
+                        id="partnerIdNumber"
+                        name="partnerIdNumber"
+                        value={formData.partnerIdNumber}
+                        onChange={handleChange}
+                        className="text-right"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {currentStep === 3 && (
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="weddingDate">תאריך חתונה</Label>
+                      <Input
+                        id="weddingDate"
+                        name="weddingDate"
+                        type="date"
+                        value={formData.weddingDate}
+                        onChange={handleChange}
+                        required
+                        className="text-right"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="expectedGuests">מספר אורחים משוער</Label>
+                      <Input
+                        id="expectedGuests"
+                        name="expectedGuests"
+                        type="number"
+                        placeholder="הכנס מספר אורחים משוער"
+                        value={formData.expectedGuests}
+                        onChange={handleChange}
+                        required
+                        className="text-right"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="weddingLocation">מיקום החתונה</Label>
+                      <Input
+                        id="weddingLocation"
+                        name="weddingLocation"
+                        type="text"
+                        placeholder="הכנס מיקום משוער"
+                        value={formData.weddingLocation}
+                        onChange={handleChange}
+                        required
+                        className="text-right"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="budget">תקציב משוער</Label>
+                      <Input
+                        id="budget"
+                        name="budget"
+                        type="text"
+                        placeholder="הכנס תקציב משוער"
+                        value={formData.budget}
+                        onChange={handleChange}
+                        required
+                        className="text-right"
+                      />
+                    </div>
+                    <div className="space-y-4">
+                      <Label>במה תרצו שנעזור לכם?</Label>
+                      <div className="space-y-2">
+                        {Object.entries(formData.preferences).map(([key, value]) => (
+                          <div key={key} className="flex items-center gap-2">
+                            <Checkbox
+                              id={key}
+                              name={`preferences.${key}`}
+                              checked={value}
+                              onCheckedChange={(checked) => 
+                                handleChange({
+                                  target: { name: `preferences.${key}`, checked }
+                                } as React.ChangeEvent<HTMLInputElement>)
+                              }
+                            />
+                            <Label htmlFor={key} className="mr-2">
+                              {key === 'venue' && 'אולם אירועים'}
+                              {key === 'catering' && 'קייטרינג'}
+                              {key === 'photography' && 'צילום'}
+                              {key === 'music' && 'מוזיקה'}
+                              {key === 'design' && 'עיצוב'}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex justify-between pt-6 border-t mt-6">
+                  {currentStep > 1 && (
+                    <Button type="button" variant="outline" onClick={prevStep}>
+                      הקודם
+                    </Button>
+                  )}
+                  {currentStep < 3 ? (
+                    <Button type="button" onClick={nextStep} className={currentStep === 1 ? 'mr-auto' : ''}>
+                      הבא
+                    </Button>
+                  ) : (
+                    <Button type="submit" disabled={isLoading} className="mr-auto">
+                      {isLoading ? 'מעדכן...' : 'סיום והמשך'}
+                    </Button>
+                  )}
+                </div>
+              </form>
+
+              {error && (
+                <div className="bg-red-50 text-red-500 p-3 rounded-md text-center mt-4">
+                  {error}
+                </div>
+              )}
             </div>
-          </form>
-        </div>
+          </CardContent>
+        </Card>
       </div>
-    </>
+    </div>
   );
-} 
+}
+

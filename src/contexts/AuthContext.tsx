@@ -3,16 +3,20 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-interface User {
+export interface User {
   _id: string;
+  fullName: string;
   email: string;
-  fullName?: string;
-  displayName?: string;
-  profilePicture?: string;
+  age?: string;
+  gender?: string;
+  location?: string;
   phoneNumber?: string;
-  weddingDate?: string;
+  idNumber?: string;
   partnerName?: string;
+  partnerEmail?: string;
   partnerPhone?: string;
+  partnerIdNumber?: string;
+  weddingDate?: string;
   expectedGuests?: string;
   weddingLocation?: string;
   budget?: string;
@@ -23,14 +27,13 @@ interface User {
     music: boolean;
     design: boolean;
   };
-  isProfileComplete: boolean;
-  authProvider?: 'google' | 'email';
+  isProfileComplete?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
-  login: (token: string, userData: User) => Promise<void>;
-  logout: () => void;
+  login: (token: string, user: User) => Promise<void>;
+  logout: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -79,11 +82,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setUser(null);
-    router.push('/login');
+  const logout = async () => {
+    try {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      setUser(null);
+      router.push('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      throw error;
+    }
   };
 
   return (
