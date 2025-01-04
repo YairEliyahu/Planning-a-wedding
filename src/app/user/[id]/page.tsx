@@ -28,7 +28,7 @@ interface UserProfile {
 }
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
-  const { user } = useAuth();
+  const { user, isAuthReady } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -36,8 +36,22 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     const checkAuth = async () => {
+      if (!isAuthReady) {
+        console.log('Auth not ready yet');
+        return;
+      }
+
+      console.log('Auth state:', { isAuthReady, user: user?._id });
+
       if (!user) {
+        console.log('No user found, redirecting to login');
         router.push('/login');
+        return;
+      }
+
+      if (user._id !== params.id) {
+        console.log('User ID mismatch:', { userId: user._id, paramsId: params.id });
+        router.push(`/user/${user._id}`);
         return;
       }
 
@@ -45,7 +59,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     };
 
     checkAuth();
-  }, [user, params.id]);
+  }, [isAuthReady, user, params.id, router]);
 
   const fetchUserProfile = async () => {
     try {
@@ -70,10 +84,10 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     }
   };
 
-  if (isLoading) {
+  if (!isAuthReady || isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        <div className="text-xl text-gray-600">טוען...</div>
       </div>
     );
   }

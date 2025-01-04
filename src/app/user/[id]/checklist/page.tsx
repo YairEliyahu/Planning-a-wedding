@@ -4,129 +4,207 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-interface Task {
-  id: number;
-  text: string;
-  completed: boolean;
+interface ChecklistItem {
+  id: string;
+  name: string;
+  budget: string;
+  isCompleted: boolean;
+  category: 'vendors' | 'attire' | 'ceremony' | 'other';
+}
+
+interface WeddingChecklist {
+  userId: string;
+  items: ChecklistItem[];
+  totalBudget: string;
 }
 
 export default function ChecklistPage({ params }: { params: { id: string } }) {
-  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const { user, isAuthReady } = useAuth();
   const router = useRouter();
-  const [tasks, setTasks] = useState<Task[]>([
-    { id: 1, text: 'בחירת אולם אירועים', completed: false },
-    { id: 2, text: 'בחירת רב לחתונה', completed: false },
-    { id: 3, text: 'הזמנת צלם', completed: false },
-    { id: 4, text: 'בחירת שמלת כלה', completed: false },
-    { id: 5, text: 'בחירת חליפת חתן', completed: false },
-    { id: 6, text: 'הזמנת די ג׳יי', completed: false },
-    { id: 7, text: 'עיצוב הזמנות', completed: false },
-    { id: 8, text: 'בחירת טבעות', completed: false },
-    { id: 9, text: 'הזמנת קייטרינג', completed: false },
-    { id: 10, text: 'תכנון ירח דבש', completed: false },
-  ]);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
+  const [checklist, setChecklist] = useState<WeddingChecklist>({
+    userId: params.id,
+    items: [
+      // ספקים
+      { id: '1', name: 'אולם/גן אירועים', budget: '', isCompleted: false, category: 'vendors' },
+      { id: '2', name: 'קייטרינג', budget: '', isCompleted: false, category: 'vendors' },
+      { id: '3', name: 'צלם', budget: '', isCompleted: false, category: 'vendors' },
+      { id: '4', name: 'צלם וידאו', budget: '', isCompleted: false, category: 'vendors' },
+      { id: '5', name: 'תקליטן/להקה', budget: '', isCompleted: false, category: 'vendors' },
+      { id: '6', name: 'עיצוב ופרחים', budget: '', isCompleted: false, category: 'vendors' },
+      
+      // לבוש ואביזרים
+      { id: '7', name: 'שמלת כלה', budget: '', isCompleted: false, category: 'attire' },
+      { id: '8', name: 'חליפת חתן', budget: '', isCompleted: false, category: 'attire' },
+      { id: '9', name: 'טבעות', budget: '', isCompleted: false, category: 'attire' },
+      { id: '10', name: 'תכשיטים ואקססוריז', budget: '', isCompleted: false, category: 'attire' },
+      
+      // טקס
+      { id: '11', name: 'רב', budget: '', isCompleted: false, category: 'ceremony' },
+      { id: '12', name: 'חופה', budget: '', isCompleted: false, category: 'ceremony' },
+      
+      // שונות
+      { id: '13', name: 'הזמנות', budget: '', isCompleted: false, category: 'other' },
+      { id: '14', name: 'מתנות לאורחים', budget: '', isCompleted: false, category: 'other' },
+      { id: '15', name: 'הסעות', budget: '', isCompleted: false, category: 'other' },
+    ],
+    totalBudget: '0'
+  });
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-      return;
-    }
-    
-    // טעינת המשימות מהשרת
-    loadTasks();
-  }, [user, router]);
-
-  const loadTasks = async () => {
-    try {
-      const response = await fetch(`/api/checklist/${params.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTasks(data.tasks);
+    const checkAuth = async () => {
+      if (!isAuthReady) {
+        console.log('Auth not ready yet');
+        return;
       }
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
-    }
+
+      console.log('Auth state:', { isAuthReady, user: user?._id });
+
+      if (!user) {
+        console.log('No user found, redirecting to login');
+        router.push('/login');
+        return;
+      }
+
+      if (user._id !== params.id) {
+        console.log('User ID mismatch:', { userId: user._id, paramsId: params.id });
+        router.push(`/user/${user._id}/checklist`);
+        return;
+      }
+
+      setIsLoading(true);
+      try {
+        console.log('Fetching checklist for user:', params.id);
+        const response = await fetch(`/api/wedding-checklist/${params.id}`);
+        const data = await response.json();
+        if (response.ok) {
+          console.log('Checklist fetched successfully');
+          setChecklist(data.checklist);
+        } else {
+          console.error('Failed to fetch checklist:', data.message);
+          setError(data.message || 'Failed to fetch checklist');
+        }
+      } catch (error) {
+        console.error('Error fetching checklist:', error);
+        setError('Failed to fetch checklist');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, [isAuthReady, user, params.id, router]);
+
+  if (!isAuthReady || isLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingSpinner}>טוען...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.error}>{error}</div>
+      </div>
+    );
+  }
+
+  const handleBudgetChange = (id: string, value: string) => {
+    setChecklist(prev => ({
+      ...prev,
+      items: prev.items.map(item => 
+        item.id === id ? { ...item, budget: value } : item
+      )
+    }));
   };
 
-  const toggleTask = (taskId: number) => {
-    setTasks(tasks.map(task => 
-      task.id === taskId ? { ...task, completed: !task.completed } : task
-    ));
+  const handleCheckItem = (id: string) => {
+    setChecklist(prev => ({
+      ...prev,
+      items: prev.items.map(item =>
+        item.id === id ? { ...item, isCompleted: !item.isCompleted } : item
+      )
+    }));
   };
 
-  const saveTasks = async () => {
-    setIsSaving(true);
-    setSaveStatus(null);
-    
+  const saveChecklist = async () => {
     try {
-      const response = await fetch(`/api/checklist/${params.id}`, {
+      const response = await fetch(`/api/wedding-checklist/${params.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ tasks }),
+        body: JSON.stringify(checklist),
       });
-
+      
       if (response.ok) {
-        setSaveStatus('success');
-      } else {
-        setSaveStatus('error');
+        alert('הרשימה נשמרה בהצלחה!');
       }
     } catch (error) {
-      console.error('Failed to save tasks:', error);
-      setSaveStatus('error');
-    } finally {
-      setIsSaving(false);
-      setTimeout(() => setSaveStatus(null), 3000);
+      console.error('Failed to save checklist:', error);
+      alert('שגיאה בשמירת הרשימה');
     }
   };
 
-  if (!user) return null;
+  const getTotalBudget = () => {
+    return checklist.items.reduce((sum, item) => sum + (Number(item.budget) || 0), 0);
+  };
 
   return (
     <div style={styles.container}>
-      <h1 style={styles.title}>צ׳ק ליסט לחתונה</h1>
+      <h1 style={styles.title}>רשימת משימות לחתונה</h1>
       
-      <div style={styles.taskList}>
-        {tasks.map(task => (
-          <div key={task.id} style={styles.taskItem}>
-            <div 
-              style={{
-                ...styles.checkbox,
-                ...(task.completed ? styles.checkboxChecked : {})
-              }}
-              onClick={() => toggleTask(task.id)}
-            >
-              {task.completed && <span style={styles.checkmark}>✓</span>}
-            </div>
-            <span style={{
-              ...styles.taskText,
-              ...(task.completed ? styles.taskCompleted : {})
-            }}>
-              {task.text}
-            </span>
+      <div style={styles.checklistContainer}>
+        {['vendors', 'attire', 'ceremony', 'other'].map(category => (
+          <div key={category} style={styles.category}>
+            <h2 style={styles.categoryTitle}>
+              {category === 'vendors' && 'ספקים'}
+              {category === 'attire' && 'לבוש ואביזרים'}
+              {category === 'ceremony' && 'טקס'}
+              {category === 'other' && 'שונות'}
+            </h2>
+            
+            {checklist.items
+              .filter(item => item.category === category)
+              .map(item => (
+                <div key={item.id} style={styles.item}>
+                  <input
+                    type="checkbox"
+                    checked={item.isCompleted}
+                    onChange={() => handleCheckItem(item.id)}
+                    style={styles.checkbox}
+                  />
+                  <span style={item.isCompleted ? styles.completedText : styles.itemText}>
+                    {item.name}
+                  </span>
+                  <div style={styles.budgetInput}>
+                    <input
+                      type="number"
+                      value={item.budget}
+                      onChange={(e) => handleBudgetChange(item.id, e.target.value)}
+                      placeholder="תקציב"
+                      style={styles.input}
+                      min="0"
+                      step="100"
+                    />
+                    <span style={styles.currencySymbol}>₪</span>
+                  </div>
+                </div>
+              ))}
           </div>
         ))}
       </div>
 
-      <button 
-        onClick={saveTasks} 
-        style={styles.saveButton}
-        disabled={isSaving}
-      >
-        {isSaving ? 'שומר...' : 'שמור שינויים'}
-      </button>
+      <div style={styles.summary}>
+        <h3>סה&quot;כ תקציב מתוכנן: ₪{getTotalBudget().toLocaleString()}</h3>
+      </div>
 
-      {saveStatus && (
-        <div style={{
-          ...styles.statusMessage,
-          ...(saveStatus === 'success' ? styles.successMessage : styles.errorMessage)
-        }}>
-          {saveStatus === 'success' ? 'נשמר בהצלחה!' : 'שגיאה בשמירה'}
-        </div>
-      )}
+      <button onClick={saveChecklist} style={styles.saveButton}>
+        שמור רשימה
+      </button>
     </div>
   );
 }
@@ -134,90 +212,96 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
 const styles = {
   container: {
     maxWidth: '800px',
-    margin: '20px auto',
+    margin: '0 auto',
     padding: '2rem',
   },
   title: {
     fontSize: '2rem',
-    color: '#333',
-    marginBottom: '2rem',
     textAlign: 'center' as const,
+    marginBottom: '2rem',
+    color: '#333',
   },
-  taskList: {
+  checklistContainer: {
     backgroundColor: '#fff',
-    padding: '2rem',
     borderRadius: '8px',
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    padding: '2rem',
   },
-  taskItem: {
+  category: {
+    marginBottom: '2rem',
+  },
+  categoryTitle: {
+    fontSize: '1.5rem',
+    color: '#0070f3',
+    marginBottom: '1rem',
+    borderBottom: '2px solid #0070f3',
+    paddingBottom: '0.5rem',
+  },
+  item: {
     display: 'flex',
     alignItems: 'center',
-    padding: '1rem',
+    padding: '0.75rem 0',
     borderBottom: '1px solid #eee',
-    transition: 'background-color 0.3s ease',
-    '&:hover': {
-      backgroundColor: '#f8f9fa',
-    },
   },
   checkbox: {
-    width: '24px',
-    height: '24px',
-    borderRadius: '50%',
-    border: '2px solid #0070f3',
     marginRight: '1rem',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.2s ease',
+    width: '20px',
+    height: '20px',
   },
-  checkboxChecked: {
-    backgroundColor: '#0070f3',
-    borderColor: '#0070f3',
-  },
-  checkmark: {
-    color: '#fff',
-    fontSize: '14px',
-  },
-  taskText: {
+  itemText: {
+    flex: 1,
     fontSize: '1.1rem',
-    color: '#333',
   },
-  taskCompleted: {
+  completedText: {
+    flex: 1,
+    fontSize: '1.1rem',
     textDecoration: 'line-through',
     color: '#888',
   },
+  budgetInput: {
+    position: 'relative' as const,
+    width: '150px',
+  },
+  input: {
+    width: '100%',
+    padding: '0.5rem',
+    paddingRight: '25px',
+    borderRadius: '4px',
+    border: '1px solid #ddd',
+  },
+  currencySymbol: {
+    position: 'absolute' as const,
+    right: '8px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    color: '#666',
+  },
+  summary: {
+    marginTop: '2rem',
+    textAlign: 'center' as const,
+    fontSize: '1.2rem',
+    color: '#333',
+  },
   saveButton: {
+    display: 'block',
+    margin: '2rem auto',
+    padding: '1rem 2rem',
     backgroundColor: '#0070f3',
     color: '#fff',
     border: 'none',
-    padding: '0.75rem 1.5rem',
     borderRadius: '4px',
     fontSize: '1.1rem',
     cursor: 'pointer',
-    marginTop: '2rem',
-    width: '100%',
     transition: 'background-color 0.3s ease',
-    '&:hover': {
-      backgroundColor: '#0060df',
-    },
-    '&:disabled': {
-      backgroundColor: '#ccc',
-      cursor: 'not-allowed',
-    },
   },
-  statusMessage: {
-    padding: '1rem',
-    borderRadius: '4px',
-    marginTop: '1rem',
+  loadingSpinner: {
+    fontSize: '1.5rem',
     textAlign: 'center' as const,
+    color: '#666',
   },
-  successMessage: {
-    backgroundColor: '#d4edda',
-    color: '#155724',
-  },
-  errorMessage: {
-    backgroundColor: '#f8d7da',
-    color: '#721c24',
+  error: {
+    color: '#ff0000',
+    textAlign: 'center' as const,
+    marginTop: '1rem',
   },
 };

@@ -2,25 +2,52 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 
 export default function MyWeddingPage({ params }: { params: { id: string } }) {
-  const { user } = useAuth();
+  const { user, isAuthReady } = useAuth();
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/login');
-    }
-  }, [user, router]);
+    const checkAuth = async () => {
+      if (!isAuthReady) {
+        console.log('Auth not ready yet');
+        return;
+      }
 
-  if (!user) return null;
+      console.log('Auth state:', { isAuthReady, user: user?._id });
+
+      if (!user) {
+        console.log('No user found, redirecting to login');
+        router.push('/login');
+        return;
+      }
+
+      if (user._id !== params.id) {
+        console.log('User ID mismatch:', { userId: user._id, paramsId: params.id });
+        router.push(`/user/${user._id}/wedding`);
+        return;
+      }
+
+      setIsLoading(false);
+    };
+
+    checkAuth();
+  }, [isAuthReady, user, params.id, router]);
+
+  if (!isAuthReady || isLoading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingSpinner}>טוען...</div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
       <h1 style={styles.title}>החתונה שלי</h1>
       <div style={styles.content}>
-        {/* כאן יבוא תוכן עמוד החתונה */}
         <p style={styles.comingSoon}>
           בקרוב - ניהול החתונה שלך!
         </p>
@@ -50,6 +77,11 @@ const styles = {
   comingSoon: {
     textAlign: 'center' as const,
     fontSize: '1.2rem',
+    color: '#666',
+  },
+  loadingSpinner: {
+    fontSize: '1.5rem',
+    textAlign: 'center' as const,
     color: '#666',
   },
 }; 

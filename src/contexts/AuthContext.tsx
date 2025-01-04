@@ -32,34 +32,40 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
+  isAuthReady: boolean;
   login: (token: string, user: User) => Promise<void>;
   logout: () => Promise<void>;
-  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        console.log('Initializing auth...');
         const token = localStorage.getItem('token');
         const storedUser = localStorage.getItem('user');
 
         if (token && storedUser) {
+          console.log('Found stored user data');
           const userData = JSON.parse(storedUser);
           setUser(userData);
+          console.log('User data set:', userData._id);
+        } else {
+          console.log('No stored user data found');
         }
       } catch (error) {
         console.error('Error initializing auth:', error);
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       } finally {
-        setIsLoading(false);
+        console.log('Auth initialization complete');
+        setIsAuthReady(true);
       }
     };
 
@@ -68,14 +74,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (token: string, userData: User) => {
     try {
+      console.log('Logging in user:', userData._id);
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(userData));
       setUser(userData);
-
-      // Redirect based on profile completion
-      if (!userData.isProfileComplete) {
-        router.push('/complete-profile');
-      }
     } catch (error) {
       console.error('Error during login:', error);
       throw error;
@@ -84,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      console.log('Logging out user');
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       setUser(null);
@@ -95,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, isAuthReady, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

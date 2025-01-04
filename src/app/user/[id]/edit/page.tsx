@@ -27,7 +27,7 @@ interface UserProfile {
 }
 
 export default function EditProfilePage({ params }: { params: { id: string } }) {
-  const { user, login } = useAuth();
+  const { user, isAuthReady } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formData, setFormData] = useState({
@@ -53,13 +53,21 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
 
   useEffect(() => {
     const checkAuth = async () => {
+      if (!isAuthReady) {
+        console.log('Auth not ready yet');
+        return;
+      }
+
+      console.log('Auth state:', { isAuthReady, user: user?._id });
+
       if (!user) {
+        console.log('No user found, redirecting to login');
         router.push('/login');
         return;
       }
 
       if (params.id !== user._id) {
-        console.error('User ID mismatch:', { paramsId: params.id, userId: user._id });
+        console.log('User ID mismatch:', { paramsId: params.id, userId: user._id });
         router.push(`/user/${user._id}/edit`);
         return;
       }
@@ -68,7 +76,7 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
     };
 
     checkAuth();
-  }, [user, params.id]);
+  }, [isAuthReady, user, params.id, router]);
 
   const fetchUserProfile = async () => {
     try {
@@ -153,31 +161,6 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
         throw new Error(data.message || 'Failed to update profile');
       }
 
-      // עדכון הטוקן והמשתמש בקונטקסט
-      if (data.token && data.user) {
-        await login(data.token, data.user);
-        
-        // עדכון הפרופיל והטופס עם המידע החדש
-        setProfile(data.user);
-        setFormData({
-          fullName: data.user.fullName || '',
-          phoneNumber: data.user.phoneNumber || '',
-          weddingDate: data.user.weddingDate ? new Date(data.user.weddingDate).toISOString().split('T')[0] : '',
-          partnerName: data.user.partnerName || '',
-          partnerPhone: data.user.partnerPhone || '',
-          expectedGuests: data.user.expectedGuests || '',
-          weddingLocation: data.user.weddingLocation || '',
-          budget: data.user.budget || '',
-          preferences: data.user.preferences || {
-            venue: false,
-            catering: false,
-            photography: false,
-            music: false,
-            design: false,
-          }
-        });
-      }
-
       setSuccessMessage('הפרופיל עודכן בהצלחה!');
       
       // הסרת ההודעה אחרי 3 שניות
@@ -190,7 +173,7 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
     }
   };
 
-  if (isLoading) {
+  if (!isAuthReady || isLoading) {
     return (
       <div style={styles.container}>
         <div style={styles.loadingSpinner}>טוען...</div>
