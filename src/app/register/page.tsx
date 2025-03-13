@@ -159,8 +159,8 @@ const RegisterPage = () => {
 const styles = {
   container: {
     maxWidth: '500px',
-    margin: '0 auto',
-    padding: '2rem',
+    margin: '80px',
+    padding: 'center' as const,
     textAlign: 'center' as const,
   },
   form: {

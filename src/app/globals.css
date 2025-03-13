@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@import url('https://fonts.googleapis.com/css2?family=Assistant:wght@200..800&display=swap');
+
+* {
+  font-family: 'Assistant', sans-serif;
+}
+
 /* Custom styles for date input */
 input[type="date"] {
   direction: rtl;

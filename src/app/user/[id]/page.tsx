@@ -318,7 +318,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         <div className="max-w-4xl mx-auto p-6">
           {/* כרטיס ספירה לאחור */}
           <div style={styles.welcomeCard}>
-            <h1 style={styles.title}>
+            <h1 className="text-5xl font-bold text-purple-800 text-center mb-12 font-mplus drop-shadow-sm">
               היי {profile.fullName} ו{profile.partnerName}
             </h1>
             <p style={styles.subtitle}>היום הגדול מתקרב ובא!</p>
