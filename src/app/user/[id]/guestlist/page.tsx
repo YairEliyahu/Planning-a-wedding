@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Head from 'next/head';
+import * as XLSX from 'xlsx';
 
 interface Guest {
   id: string;
@@ -50,7 +51,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     id: '',
     name: '',
     phoneNumber: '',
-    numberOfGuests: 1,
+    numberOfGuests: 0,
     side: 'משותף',
     isConfirmed: null,
     notes: ''
@@ -60,24 +61,35 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const [filter, setFilter] = useState<'all' | 'confirmed' | 'declined' | 'pending'>('all');
   const [sideFilter, setSideFilter] = useState<'all' | 'חתן' | 'כלה' | 'משותף'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importStatus, setImportStatus] = useState<{ 
+    success: number, 
+    error: number,
+    errorDetails?: {
+      missingName?: number,
+      invalidPhone?: number, 
+      apiErrors?: number,
+      otherErrors?: number
+    } 
+  } | null>(null);
+  const [showImportStatus, setShowImportStatus] = useState(false);
+  const [importProgress, setImportProgress] = useState<{ current: number, total: number, currentName: string }>({ current: 0, total: 0, currentName: '' });
+  const [importOverlay, setImportOverlay] = useState(false);
 
   useEffect(() => {
+    setIsLoading(true);
+    
     const checkAuth = async () => {
       if (!isAuthReady) {
-        console.log('Auth not ready yet');
         return;
       }
 
-      console.log('Auth state:', { isAuthReady, user: user?._id });
-
       if (!user) {
-        console.log('No user found, redirecting to login');
         router.push('/login');
         return;
       }
 
       if (user._id !== params.id) {
-        console.log('User ID mismatch:', { userId: user._id, paramsId: params.id });
         router.push(`/user/${user._id}/guestlist`);
         return;
       }
@@ -91,6 +103,22 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
     checkAuth();
   }, [isAuthReady, user, params.id, router]);
+  
+  // אפקט נוסף לניקוי אורחי דוגמה שהתווספו
+  useEffect(() => {
+    const cleanupExampleGuests = async () => {
+      if (guests.length > 0) {
+        console.log('בודק ומנקה אורחי דוגמה...');
+        const updatedGuests = await removeExampleGuests([...guests]);
+        if (updatedGuests.length !== guests.length) {
+          console.log(`נמחקו ${guests.length - updatedGuests.length} אורחי דוגמה`);
+          setGuests(updatedGuests);
+        }
+      }
+    };
+    
+    cleanupExampleGuests();
+  }, [guests.length]);
 
   const fetchUserProfile = async () => {
     try {
@@ -112,61 +140,214 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
   const fetchGuestlist = async () => {
     try {
-      // בפיתוח אמיתי - יש לשלוף נתונים מה-API
-      // בינתיים נשתמש בנתונים לדוגמה
-      const sampleGuests: Guest[] = [
-        { id: '1', name: 'משה כהן', phoneNumber: '050-1234567', numberOfGuests: 2, side: 'חתן', isConfirmed: true, notes: 'חבר קרוב' },
-        { id: '2', name: 'רחל לוי', phoneNumber: '052-7654321', numberOfGuests: 3, side: 'כלה', isConfirmed: false, notes: 'מגיעה מרחוק' },
-        { id: '3', name: 'דוד ישראלי', phoneNumber: '054-1112222', numberOfGuests: 1, side: 'משותף', isConfirmed: null, notes: '' },
-        { id: '4', name: 'יעל אברהם', phoneNumber: '058-3334444', numberOfGuests: 4, side: 'חתן', isConfirmed: true, notes: 'אלרגיה לאגוזים' },
-        { id: '5', name: 'יוסף חיים', phoneNumber: '053-5556666', numberOfGuests: 2, side: 'כלה', isConfirmed: null, notes: '' }
-      ];
-      setGuests(sampleGuests);
+      // Call the API to fetch guests for this user
+      const response = await fetch(`/api/guests?userId=${params.id}`);
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to fetch guest list');
+      }
+      
+      // קבלת האורחים מהתשובה
+      const fetchedGuests = data.guests || [];
+      
+      // הסרת אורחי דוגמה אם קיימים
+      const cleanedGuests = await removeExampleGuests(fetchedGuests);
+      
+      setGuests(cleanedGuests);
     } catch (error) {
       console.error('Failed to fetch guestlist:', error);
     }
   };
-
-  const handleAddGuest = () => {
-    if (!newGuest.name.trim()) return;
-
-    const guestToAdd = {
-      ...newGuest,
-      id: Date.now().toString()
-    };
-
-    setGuests([...guests, guestToAdd]);
-    setNewGuest({
-      id: '',
-      name: '',
-      phoneNumber: '',
-      numberOfGuests: 1,
-      side: 'משותף',
-      isConfirmed: null,
-      notes: ''
+  
+  // פונקציה למחיקת אורחי דוגמה אוטומטית
+  const removeExampleGuests = async (guestList: Guest[]) => {
+    // שמות של אורחי דוגמה מוכרים
+    const exampleNames = ['ישראל ישראלי', 'שרה לוי', 'משפחת כהן'];
+    const exampleKeywords = ['דוגמא', 'דוגמה', 'Example', 'מיכל לוי', 'Israeli', 'Israel', 'template'];
+    
+    // מציאת אורחי הדוגמה
+    const exampleGuests = guestList.filter(guest => {
+      // בדיקה לשמות מדויקים
+      if (exampleNames.includes(guest.name)) return true;
+      
+      // בדיקה להערות מיוחדות
+      if (guest.notes === 'דוגמה להערה' || guest.notes === 'חברים משותפים') return true;
+      
+      // בדיקה לתוכן שם שמכיל מילות מפתח של דוגמאות
+      const nameLowercase = guest.name.toLowerCase();
+      for (const keyword of exampleKeywords) {
+        if (guest.name.includes(keyword) || nameLowercase.includes(keyword.toLowerCase())) {
+          return true;
+        }
+      }
+      
+      return false;
     });
-    setIsAddingGuest(false);
+    
+    // אם יש אורחי דוגמה, נמחק אותם
+    if (exampleGuests.length > 0) {
+      console.log(`מוחק ${exampleGuests.length} אורחי דוגמה...`);
+      
+      // מחיקת כל אורח דוגמה מ-API ומהרשימה המקומית
+      const updatedList = [...guestList];
+      
+      for (const guest of exampleGuests) {
+        try {
+          // מחיקה ישירה מה-API, ללא אישור משתמש
+          const response = await fetch(`/api/guests/${guest.id}`, {
+            method: 'DELETE',
+          });
+          
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.message || 'Failed to delete example guest');
+          }
+          
+          // הסרת האורח מהרשימה המקומית
+          const index = updatedList.findIndex(g => g.id === guest.id);
+          if (index !== -1) updatedList.splice(index, 1);
+        } catch (error) {
+          console.error(`שגיאה במחיקת אורח דוגמה ${guest.name}:`, error);
+        }
+      }
+      
+      // החזרת הרשימה המעודכנת
+      return updatedList;
+    }
+    
+    // אם אין אורחי דוגמה, החזר את הרשימה המקורית
+    return guestList;
   };
 
-  const handleEditGuest = (guest: Guest) => {
-    if (editingGuestId === guest.id) {
-      setGuests(guests.map(g => g.id === guest.id ? guest : g));
-      setEditingGuestId(null);
-    } else {
-      setEditingGuestId(guest.id);
+  const handleAddGuest = async () => {
+    if (!newGuest.name.trim()) return;
+    
+    try {
+      const guestToAdd = {
+        ...newGuest,
+        userId: params.id // Add user ID to associate with this guest
+      };
+      
+      // Call the API to add the guest
+      const response = await fetch('/api/guests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(guestToAdd),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to add guest');
+      }
+      
+      // Add the new guest to the state
+      setGuests([...guests, data.guest]);
+      
+      // Reset the form
+      setNewGuest({
+        id: '',
+        name: '',
+        phoneNumber: '',
+        numberOfGuests: 0,
+        side: 'משותף',
+        isConfirmed: null,
+        notes: ''
+      });
+      setIsAddingGuest(false);
+    } catch (error) {
+      console.error('Failed to add guest:', error);
+      alert('Failed to add guest. Please try again.');
     }
   };
 
-  const handleDeleteGuest = (guestId: string) => {
+  const handleEditGuest = async (guest: Guest) => {
+    try {
+      if (editingGuestId === guest.id) {
+        // Call the API to update the guest
+        const response = await fetch(`/api/guests/${guest.id}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(guest),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.message || 'Failed to update guest');
+        }
+        
+        // Update the guest in the state
+        setGuests(guests.map(g => g.id === guest.id ? data.guest : g));
+        setEditingGuestId(null);
+      } else {
+        setEditingGuestId(guest.id);
+      }
+    } catch (error) {
+      console.error('Failed to update guest:', error);
+      alert('Failed to update guest. Please try again.');
+    }
+  };
+
+  const handleDeleteGuest = async (guestId: string) => {
     if (confirm('האם אתה בטוח שברצונך למחוק אורח זה?')) {
-      setGuests(guests.filter(guest => guest.id !== guestId));
+      try {
+        // Call the API to delete the guest
+        const response = await fetch(`/api/guests/${guestId}`, {
+          method: 'DELETE',
+        });
+        
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.message || 'Failed to delete guest');
+        }
+        
+        // Remove the guest from the state
+        setGuests(guests.filter(guest => guest.id !== guestId));
+      } catch (error) {
+        console.error('Failed to delete guest:', error);
+        alert('Failed to delete guest. Please try again.');
+      }
     }
   };
 
-  const handleConfirmGuest = (guestId: string, status: boolean | null) => {
-    setGuests(guests.map(guest => 
-      guest.id === guestId ? { ...guest, isConfirmed: status } : guest
-    ));
+  const handleConfirmGuest = async (guestId: string, status: boolean | null) => {
+    try {
+      // Find the guest to update
+      const guestToUpdate = guests.find(guest => guest.id === guestId);
+      if (!guestToUpdate) return;
+      
+      // Create updated guest with new status
+      const updatedGuest = { ...guestToUpdate, isConfirmed: status };
+      
+      // Call the API to update the guest
+      const response = await fetch(`/api/guests/${guestId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updatedGuest),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to update guest status');
+      }
+      
+      // Update the guest in the state
+      setGuests(guests.map(guest => 
+        guest.id === guestId ? { ...guest, isConfirmed: status } : guest
+      ));
+    } catch (error) {
+      console.error('Failed to update guest status:', error);
+      alert('Failed to update guest status. Please try again.');
+    }
   };
 
   const getGuestStats = () => {
@@ -203,16 +384,699 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       return true;
     });
 
+  const handleExcelImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    setImportStatus(null);
+    setImportOverlay(true);
+    setImportProgress({ current: 0, total: 0, currentName: '' });
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // נניח שהגיליון הראשון מכיל את הנתונים
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // המרה למערך של אובייקטים
+        interface ExcelGuestRow {
+          [key: string]: string | number | boolean | null | undefined;
+        }
+        
+        // במידה ויש שורות ריקות או כותרות, יש לדלג עליהן
+        const rows = XLSX.utils.sheet_to_json<ExcelGuestRow>(worksheet, { 
+          defval: '',  // ערך ברירת מחדל לתאים ריקים
+          raw: false,  // להמיר מספרים למחרוזות
+          header: 'A' // להשתמש בשמות עמודות מקוריים אם אין כותרות
+        });
+        
+        console.log('Raw Excel data:', rows);
+        
+        // הסרת שורות ריקות או כותרות
+        const filteredRows = rows.filter(row => {
+          // בדיקה אם זו שורת כותרת
+          const isHeader = Object.values(row).some(val => 
+            typeof val === 'string' && 
+            (val.includes('מוזמנים') || val.includes('מאושרות') || val.includes('שם המוזמן'))
+          );
+          
+          // בדיקה אם זו שורה ריקה
+          const isEmpty = Object.values(row).every(val => val === '' || val === null || val === undefined);
+          
+          // בדיקה אם זו שורת דוגמה מהתבנית
+          const isExample = Object.values(row).some(val => 
+            typeof val === 'string' && 
+            (val.includes('ישראל ישראלי') || val.includes('דוגמה להערה') || val.includes('שרה לוי'))
+          );
+          
+          // לסנן שורות כותרת, שורות ריקות ושורות דוגמה
+          return !isHeader && !isEmpty && !isExample;
+        });
+        
+        console.log('Filtered rows:', filteredRows);
+        
+        // אם אין שורות תקפות
+        if (filteredRows.length === 0) {
+          console.error('No valid rows found in Excel file');
+          setImportStatus({ 
+            success: 0, 
+            error: 1,
+            errorDetails: {
+              missingName: 0,
+              invalidPhone: 0,
+              apiErrors: 0,
+              otherErrors: 1
+            }
+          });
+          setImportOverlay(false);
+          setIsImporting(false);
+          setShowImportStatus(true);
+          return;
+        }
+
+        // עדכון הקידמה הכללית
+        setImportProgress(prev => ({ ...prev, total: filteredRows.length }));
+        
+        // זיהוי שמות העמודות בקובץ
+        const sampleRow = filteredRows[0];
+        const columnKeys = Object.keys(sampleRow || {});
+        
+        // רשימת העמודות בקובץ האקסל שהמשתמש העלה
+        console.log('Available columns in Excel file:', columnKeys);
+        
+        // פונקציה לזיהוי עמודה לפי מילות מפתח
+        const findColumn = (keywords: string[]): string | null => {
+          // בדיקה ישירה של המילות מפתח
+          for (const key of columnKeys) {
+            const normalizedKey = key.toLowerCase().trim();
+            for (const keyword of keywords) {
+              const normalizedKeyword = keyword.toLowerCase().trim();
+              if (normalizedKey === normalizedKeyword || normalizedKey.includes(normalizedKeyword)) {
+                return key;
+              }
+            }
+          }
+          return null;
+        };
+        
+        // זיהוי העמודות - ניסיון ספציפי למבנה שראינו
+        let nameColumn = findColumn(['שם המוזמן', 'שם', 'name']) || columnKeys.find(c => c.includes('מוזמן') || c.includes('שם')) || '';
+        const phoneColumn = findColumn(['ניוד', 'טלפון', 'phone', 'נייד', 'הסבר קצר']) || columnKeys.find(c => /ני[יו]ד/.test(c)) || '';
+        let guestsColumn = findColumn(['מספר מוזמנים', 'מספר אורחים', 'כמות', 'guests', 'count']) || columnKeys.find(c => c.includes('מספר') || c.includes('כמות')) || '';
+        const sideColumn = findColumn(['מתאם של...', 'צד', 'שיוך']) || columnKeys.find(c => c.includes('מתאם') || c.includes('שיוך')) || '';
+        const relationColumn = findColumn(['שיוך להזמנה', 'שיוך']) || '';
+        const notesColumn = findColumn(['הערות (כולל הופעי)', 'הערות', 'notes']) || '';
+        
+        console.log('Identified columns:', { 
+          nameColumn, 
+          phoneColumn, 
+          guestsColumn, 
+          sideColumn, 
+          notesColumn,
+          relationColumn 
+        });
+        
+        // אם לא זוהתה עמודת שם, ננסה להשתמש בעמודה הראשונה
+        if (!nameColumn && columnKeys.length > 0) {
+          console.warn('Name column not identified, using first column:', columnKeys[0]);
+          nameColumn = columnKeys[0];
+        }
+        
+        // ניתוח הנתונים בקובץ לזיהוי עמודת מספר המוזמנים לפי המאפיינים שלה
+        const analyzeNumericColumns = () => {
+          // מועמדים פוטנציאליים לעמודת מספר מוזמנים
+          const potentialGuestCountColumns: { column: string, numericRatio: number, avgValue: number }[] = [];
+          
+          // עבור כל עמודה
+          for (const column of columnKeys) {
+            // דילוג על עמודות שכבר זיהינו
+            if (column === nameColumn || column === phoneColumn || 
+                column === notesColumn || column === sideColumn || 
+                column === relationColumn) continue;
+            
+            let numericCount = 0;
+            let totalCount = 0;
+            let sum = 0;
+            let validRows = 0;
+            
+            // בדיקת השורות בעמודה
+            for (const row of filteredRows) {
+              const value = row[column];
+              
+              if (value !== undefined && value !== '') {
+                totalCount++;
+                
+                // אם זה מספר ישיר
+                if (typeof value === 'number') {
+                  if (value >= 1 && value <= 20) { // מספר הגיוני של אורחים
+                    numericCount++;
+                    sum += value;
+                    validRows++;
+                  }
+                } 
+                // אם זה מחרוזת שניתן להמיר למספר
+                else if (typeof value === 'string') {
+                  const cleanValue = value.replace(/[^\d]/g, '');
+                  if (cleanValue) {
+                    const num = parseInt(cleanValue);
+                    if (!isNaN(num) && num >= 1 && num <= 20) {
+                      numericCount++;
+                      sum += num;
+                      validRows++;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // חישוב אחוז הערכים המספריים בעמודה
+            const numericRatio = totalCount > 0 ? numericCount / totalCount : 0;
+            // חישוב ממוצע הערכים
+            const avgValue = validRows > 0 ? sum / validRows : 0;
+            
+            if (numericRatio > 0.5 && avgValue >= 1) { // אם יותר ממחצית הערכים הם מספרים וממוצע סביר
+              potentialGuestCountColumns.push({
+                column,
+                numericRatio,
+                avgValue
+              });
+              console.log(`Potential guest count column: ${column}, numeric ratio: ${numericRatio.toFixed(2)}, avg value: ${avgValue.toFixed(2)}`);
+            }
+          }
+          
+          // מיון המועמדים לפי רלוונטיות
+          potentialGuestCountColumns.sort((a, b) => {
+            // העדפה ראשונה: עמודות עם שם רלוונטי
+            const aNameRelevance = a.column.includes('מוזמנים') || a.column.includes('כמות') || a.column.includes('מספר') ? 1 : 0;
+            const bNameRelevance = b.column.includes('מוזמנים') || b.column.includes('כמות') || b.column.includes('מספר') ? 1 : 0;
+            
+            if (aNameRelevance !== bNameRelevance) return bNameRelevance - aNameRelevance;
+            
+            // העדפה שנייה: אחוז גבוה יותר של מספרים
+            if (Math.abs(a.numericRatio - b.numericRatio) > 0.1) return b.numericRatio - a.numericRatio;
+            
+            // העדפה שלישית: ממוצע ערכים הגיוני יותר למספר מוזמנים (בין 1 ל-5)
+            const aAvgDeviation = Math.abs(a.avgValue - 2.5);
+            const bAvgDeviation = Math.abs(b.avgValue - 2.5);
+            return aAvgDeviation - bAvgDeviation;
+          });
+          
+          return potentialGuestCountColumns.length > 0 ? potentialGuestCountColumns[0].column : null;
+        };
+        
+        // אם לא זיהינו עמודת מספר מוזמנים לפי השם, ננסה לזהות לפי הנתונים
+        let detectedGuestsColumn = null;
+        if (!guestsColumn) {
+          detectedGuestsColumn = analyzeNumericColumns();
+          if (detectedGuestsColumn) {
+            console.log(`Detected guests column by data analysis: ${detectedGuestsColumn}`);
+            guestsColumn = detectedGuestsColumn;
+          }
+        }
+        
+        // מונים להצלחות וכשלונות
+        let successCount = 0;
+        let errorCount = 0;
+        // מונים לסוגי שגיאות
+        let missingNameCount = 0;
+        let invalidPhoneCount = 0;
+        let apiErrorCount = 0;
+        let otherErrorCount = 0;
+        
+        // עיבוד כל שורה
+        for (const row of filteredRows) {
+          try {
+            // שם האורח - חובה
+            const guestName = String(row[nameColumn] || '').trim();
+            if (!guestName) {
+              console.log('Skipping row - no name found', row);
+              errorCount++;
+              missingNameCount++;
+              continue;
+            }
+            
+            // מספר אורחים - שלב 1: בדיקת עמודת מספר מוזמנים
+            let numberOfGuestsFromColumn = 1;
+            if (guestsColumn) {
+              // ניסיון פרסור מספר באופנים שונים
+              const guestValue = row[guestsColumn];
+              console.log('Guest number raw value:', guestValue, 'type:', typeof guestValue);
+              
+              if (guestValue !== undefined && guestValue !== '') {
+                // אם זה מספר
+                if (typeof guestValue === 'number') {
+                  // אפשר גם 0 מוזמנים
+                  numberOfGuestsFromColumn = guestValue >= 0 ? Math.round(guestValue) : 1;
+                } 
+                // אם זה מחרוזת - בדיקה אם מציין זוג
+                else if (typeof guestValue === 'string') {
+                  const strValue = String(guestValue).trim().toLowerCase();
+                  // אם מציין זוג
+                  if (strValue === 'כן' || strValue === 'yes' || strValue === 'true' || 
+                      strValue.includes('זוג') || strValue.includes('+')) {
+                    numberOfGuestsFromColumn = 2;
+                    console.log('Found couple indication, setting to 2 guests');
+                  } else {
+                    // ניקוי טקסט והמרה למספר
+                    const cleanedValue = String(guestValue).replace(/[^\d]/g, '');
+                    const parsedGuests = parseInt(cleanedValue);
+                    if (!isNaN(parsedGuests) && parsedGuests >= 0) {  // שינוי כאן לתמיכה ב-0
+                      numberOfGuestsFromColumn = parsedGuests;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // בדיקה בעמודות נוספות שעשויות להכיל מספרים
+            if (numberOfGuestsFromColumn === 1) {
+              // בדיקת עמודות מספריות אחרות
+              for (const key of columnKeys) {
+                if (key !== guestsColumn && key !== nameColumn && key !== phoneColumn && 
+                    key !== sideColumn && key !== notesColumn) {
+                  const value = row[key];
+                  if (value !== undefined && value !== '') {
+                    let parsedValue = 0;
+                    
+                    if (typeof value === 'number') {
+                      parsedValue = Math.round(value);
+                    } else if (typeof value === 'string') {
+                      const cleanedValue = String(value).replace(/[^\d]/g, '');
+                      parsedValue = parseInt(cleanedValue);
+                    }
+                    
+                    // אם מצאנו מספר הגיוני של מוזמנים (כולל 0)
+                    if (!isNaN(parsedValue) && parsedValue >= 0 && parsedValue <= 20) {
+                      numberOfGuestsFromColumn = parsedValue;
+                      console.log('Found guest count in column:', key, 'value:', parsedValue);
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+            
+            // מספר אורחים - שלב 2: ניתוח לפי שם האורח
+            let numberOfGuestsFromName = 1;
+            
+            // בדיקה של שם האורח אם מציין זוג או משפחה
+            if (guestName) {
+              // בדיקת ציון זוג בשם
+              if (guestName.includes(' ו') || guestName.includes(' +') || 
+                  guestName.includes('+') || guestName.includes(' and ') || 
+                  guestName.includes('&')) {
+                numberOfGuestsFromName = 2;
+                console.log('Guest name suggests a couple:', guestName, 'setting to 2 guests');
+              }
+              
+              // בדיקת אם מדובר במשפחה
+              if (guestName.includes('משפחת') || guestName.includes('משפ\'') || 
+                  guestName.includes('family') || guestName.includes('הורי') || 
+                  guestName.includes('ילדי') || guestName.includes('וילדיהם')) {
+                // אם זה משפחה, נגדיר לפחות 3 אנשים אם לא מצוין אחרת
+                numberOfGuestsFromName = Math.max(numberOfGuestsFromName, 3);
+                console.log('Guest name suggests a family:', guestName, 'setting to at least 3 guests');
+              }
+            }
+            
+            // שלב 3: בחירת המספר הגבוה יותר בין שתי השיטות
+            // אבל אם יש עמודה מספרית מובהקת, נעדיף אותה על פני ניתוח השם
+            const preferColumnValue = detectedGuestsColumn !== null;
+            
+            // שלב 3: בחירת המספר המוזמנים הסופי
+            // האלגוריתם המעודכן: אם הערך מהעמודה הוא 0, נשתמש ב-0
+            // אחרת, אם מקור העמודה מובהק, נשתמש בו; אחרת, ניקח את המקסימום
+            let numberOfGuests = 1;
+            
+            if (numberOfGuestsFromColumn === 0) {
+              // אם הערך מהעמודה הוא 0, נשתמש ב-0 גם אם ניתוח השם אומר אחרת
+              numberOfGuests = 0;
+            } else if (preferColumnValue) {
+              // אם יש עמודה מספרית מובהקת, נעדיף אותה על פני ניתוח השם
+              numberOfGuests = numberOfGuestsFromColumn;
+            } else {
+              // אחרת, ניקח את הערך הגבוה ביותר מהעמודה או מניתוח השם
+              numberOfGuests = Math.max(numberOfGuestsFromColumn, numberOfGuestsFromName);
+            }
+            
+            console.log('Final guest count decision:', {
+              name: guestName,
+              fromColumn: numberOfGuestsFromColumn,
+              fromName: numberOfGuestsFromName,
+              preferColumnValue: preferColumnValue,
+              final: numberOfGuests
+            });
+            
+            // טלפון (אופציונלי)
+            let phoneNumber = '';
+            
+            // ניסיון פרסור טלפון
+            if (phoneColumn && row[phoneColumn] !== undefined) {
+              phoneNumber = String(row[phoneColumn] || '').trim();
+              
+              // שמירה על מקפים בפורמט של טלפונים
+              // ניקוי רק תווים שאינם ספרות, מקפים, או סימני פלוס
+              if (phoneNumber) {
+                // בדיקה אם יש מקפים במיקום נכון לפורמט ישראלי
+                const cleanedPhone = phoneNumber.replace(/[^\d+-]/g, '');
+                // שמירה על פורמט מקפים סטנדרטי אם אפשר
+                if (/^\d{3}-\d{7}$/.test(cleanedPhone) || /^\d{2}-\d{7}$/.test(cleanedPhone)) {
+                  // הפורמט תקין עם מקף, נשמור עליו
+                  phoneNumber = cleanedPhone;
+                } else {
+                  // אם אין פורמט תקין, נסיר את כל התווים שאינם ספרות
+                  const digitsOnly = cleanedPhone.replace(/\D/g, '');
+                  
+                  // בדיקה האם יש מספיק ספרות לטלפון ישראלי תקין
+                  if (digitsOnly.length < 9) {
+                    console.log(`מספר טלפון לא תקין: ${phoneNumber}, נשארו רק ${digitsOnly.length} ספרות`);
+                    invalidPhoneCount++;
+                  }
+                  
+                  // אם יש 10 ספרות ומתחיל ב-05, נפרמט כ-XXX-XXXXXXX
+                  if (digitsOnly.length === 10 && digitsOnly.startsWith('05')) {
+                    phoneNumber = `${digitsOnly.substring(0, 3)}-${digitsOnly.substring(3)}`;
+                  } else if (digitsOnly.length === 9 && (digitsOnly.startsWith('5') || digitsOnly.startsWith('9'))) {
+                    // אם יש 9 ספרות ומתחיל ב-5 או 9, נוסיף 0 ונפרמט
+                    phoneNumber = `0${digitsOnly.substring(0, 2)}-${digitsOnly.substring(2)}`;
+                  } else {
+                    // אחרת, נשאיר רק ספרות
+                    phoneNumber = digitsOnly;
+                  }
+                }
+              }
+            }
+            
+            // אם לא נמצא טלפון בעמודה הרגילה, נחפש בכל העמודות
+            if (!phoneNumber) {
+              for (const key of columnKeys) {
+                if (key !== phoneColumn && (
+                  key.includes('טלפון') || key.includes('נייד') || 
+                  key.includes('ניוד') || key.includes('phone') || 
+                  key.includes('מספר') && !key.includes('מוזמנים')
+                )) {
+                  const potentialPhone = String(row[key] || '').trim();
+                  const cleanedPhone = potentialPhone.replace(/[^\d+-]/g, '');
+                  
+                  // בדיקה שזה טלפון תקין (לפחות 9 ספרות)
+                  if (cleanedPhone && cleanedPhone.replace(/\D/g, '').length >= 9 && /\d{9,}/.test(cleanedPhone.replace(/\D/g, ''))) {
+                    // אותו טיפול כמו למעלה לפי פורמט
+                    const digitsOnly = cleanedPhone.replace(/\D/g, '');
+                    if (digitsOnly.length === 10 && digitsOnly.startsWith('05')) {
+                      phoneNumber = `${digitsOnly.substring(0, 3)}-${digitsOnly.substring(3)}`;
+                    } else if (digitsOnly.length === 9 && (digitsOnly.startsWith('5') || digitsOnly.startsWith('9'))) {
+                      phoneNumber = `0${digitsOnly.substring(0, 2)}-${digitsOnly.substring(2)}`;
+                    } else {
+                      phoneNumber = cleanedPhone;
+                    }
+                    console.log('Found phone in column:', key, 'value:', phoneNumber);
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // בדיקה נוספת בכל העמודות למקרה שלא מצאנו טלפון
+            if (!phoneNumber) {
+              for (const key of columnKeys) {
+                if (!key.includes('שם') && !key.includes('צד') && !key.includes('הערות')) {
+                  const value = String(row[key] || '').trim();
+                  // בדיקה אם יש ערך שנראה כמו מספר טלפון (רצף של לפחות 9 ספרות)
+                  const cleanedValue = value.replace(/[^\d+-]/g, '');
+                  const digitsOnly = cleanedValue.replace(/\D/g, '');
+                  if (digitsOnly.length >= 9 && /\d{9,}/.test(digitsOnly)) {
+                    // עיצוב מחדש של מספר הטלפון לפי הצורך
+                    if (digitsOnly.length === 10 && digitsOnly.startsWith('05')) {
+                      phoneNumber = `${digitsOnly.substring(0, 3)}-${digitsOnly.substring(3)}`;
+                    } else if (digitsOnly.length === 9 && (digitsOnly.startsWith('5') || digitsOnly.startsWith('9'))) {
+                      phoneNumber = `0${digitsOnly.substring(0, 2)}-${digitsOnly.substring(2)}`;
+                    } else {
+                      phoneNumber = cleanedValue;
+                    }
+                    console.log('Found potential phone number in column:', key, 'value:', phoneNumber);
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // קביעת צד (חתן/כלה/משותף)
+            let side: 'חתן' | 'כלה' | 'משותף' = 'משותף';
+            
+            // בדיקה בכל העמודות לזיהוי הצד
+            const sideColumns = [sideColumn, relationColumn];
+            let foundSide = false;
+            for (const col of sideColumns) {
+              if (col && row[col]) {
+                const value = String(row[col]).trim().toLowerCase();
+                if (value.includes('חתן')) {
+                  side = 'חתן';
+                  foundSide = true;
+                  break;
+                } else if (value.includes('כלה')) {
+                  side = 'כלה';
+                  foundSide = true;
+                  break;
+                }
+              }
+            }
+            
+            // אם לא זוהה צד בעמודות הרגילות, נחפש בשאר העמודות
+            if (!foundSide) {
+              // בדיקת כל העמודות לחיפוש צד
+              for (const key of columnKeys) {
+                if (!sideColumns.includes(key)) {
+                  const cellValue = String(row[key] || '').trim().toLowerCase();
+                  
+                  // בדיקה ספציפית לחתן/כלה
+                  if (cellValue === 'חתן' || cellValue.includes('חתן') || 
+                      cellValue.includes('גבר') || cellValue.includes('בן')) {
+                    side = 'חתן';
+                    console.log('Found groom side in column:', key, 'value:', cellValue);
+                    foundSide = true;
+                    break;
+                  } else if (cellValue === 'כלה' || cellValue.includes('כלה') || 
+                            cellValue.includes('אישה') || cellValue.includes('בת')) {
+                    side = 'כלה';
+                    console.log('Found bride side in column:', key, 'value:', cellValue);
+                    foundSide = true;
+                    break;
+                  }
+                }
+              }
+            }
+            
+            // בדיקה של שם האורח לזיהוי חתן/כלה
+            if (!foundSide && guestName) {
+              const lowerName = guestName.toLowerCase();
+              // אם השם מכיל מילים כמו "משפחת החתן" או "הורי החתן"
+              if (lowerName.includes('חתן') || lowerName.includes('אבא') || lowerName.includes('אבי')) {
+                side = 'חתן';
+              } else if (lowerName.includes('כלה') || lowerName.includes('אמא') || lowerName.includes('אם')) {
+                side = 'כלה';
+              }
+            }
+            
+            // הערות (אופציונלי)
+            const notes = notesColumn ? String(row[notesColumn] || '') : '';
+            
+            const guestData = {
+              userId: params.id,
+              name: guestName,
+              phoneNumber,
+              numberOfGuests,
+              side,
+              isConfirmed: null, // בדרך כלל אורחים מיובאים מסומנים כממתינים לאישור
+              notes
+            };
+            
+            console.log('Sending guest data:', guestData);
+            
+            // עדכון הקידמה הנוכחית
+            setImportProgress(prev => ({ 
+              current: prev.current + 1, 
+              total: prev.total, 
+              currentName: guestName 
+            }));
+            
+            // שליחת הנתונים ל-API
+            const response = await fetch('/api/guests', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify(guestData),
+            });
+            
+            if (response.ok) {
+              successCount++;
+            } else {
+              const errorData = await response.json();
+              console.error('API error response:', errorData);
+              errorCount++;
+              apiErrorCount++;
+            }
+          } catch (error) {
+            console.error('שגיאה בייבוא שורה:', error, row);
+            errorCount++;
+            otherErrorCount++;
+          }
+        }
+        
+        // עדכון התוצאות
+        setImportStatus({ 
+          success: successCount, 
+          error: errorCount,
+          errorDetails: {
+            missingName: missingNameCount,
+            invalidPhone: invalidPhoneCount,
+            apiErrors: apiErrorCount,
+            otherErrors: otherErrorCount
+          }
+        });
+        setShowImportStatus(true);
+        
+        // רענון רשימת האורחים
+        if (successCount > 0) {
+          fetchGuestlist();
+        }
+      } catch (error) {
+        console.error('שגיאה בעיבוד קובץ Excel:', error);
+        setImportStatus({ 
+          success: 0, 
+          error: 1,
+          errorDetails: {
+            missingName: 0,
+            invalidPhone: 0,
+            apiErrors: 0,
+            otherErrors: 1
+          }
+        });
+        setShowImportStatus(true);
+      } finally {
+        setImportOverlay(false);
+        setIsImporting(false);
+      }
+    };
+    
+    reader.readAsArrayBuffer(file);
+    
+    // איפוס שדה הקובץ כדי שניתן יהיה לבחור שוב את אותו הקובץ
+    event.target.value = '';
+  };
+
+  const handleExcelTemplateDownload = () => {
+    // יצירת נתוני תבנית לדוגמה
+    const templateData = [
+      {
+        'שם': 'ישראל ישראלי',
+        'טלפון': '050-1234567',
+        'מספר אורחים': 2,
+        'צד': 'חתן',
+        'אישור הגעה': '',
+        'הערות': 'דוגמה להערה'
+      },
+      {
+        'שם': 'שרה לוי',
+        'טלפון': '052-9876543',
+        'מספר אורחים': 1,
+        'צד': 'כלה',
+        'אישור הגעה': '',
+        'הערות': ''
+      },
+      {
+        'שם': 'משפחת כהן',
+        'טלפון': '054-5551234',
+        'מספר אורחים': 4,
+        'צד': 'משותף',
+        'אישור הגעה': '',
+        'הערות': 'חברים משותפים'
+      }
+    ];
+
+    // יצירת גיליון עבודה
+    const ws = XLSX.utils.json_to_sheet(templateData);
+
+    // הוספת הוראות בתחילת הגיליון
+    XLSX.utils.sheet_add_aoa(ws, [
+      ['תבנית לייבוא רשימת אורחים'],
+      ['הוראות:'],
+      ['1. מלא את הפרטים בטבלה מתחת לכותרות'],
+      ['2. עמודת "שם" היא חובה, שאר העמודות אופציונליות'],
+      ['3. עבור "צד" ניתן לרשום: חתן, כלה, או משותף'],
+      ['4. עבור "אישור הגעה" ניתן לרשום: כן, לא, או להשאיר ריק'],
+      ['']
+    ], { origin: 'A1' });
+
+    // התאמת רוחב העמודות
+    const wscols = [
+      { wch: 20 }, // שם
+      { wch: 15 }, // טלפון
+      { wch: 8 },  // מספר אורחים
+      { wch: 10 }, // צד
+      { wch: 10 }, // אישור הגעה
+      { wch: 30 }  // הערות
+    ];
+    ws['!cols'] = wscols;
+
+    // יצירת הספר
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'רשימת אורחים');
+
+    // הורדת הקובץ
+    XLSX.writeFile(wb, 'תבנית_רשימת_אורחים.xlsx');
+  };
+
+  // פונקציה למחיקת כל האורחים (לצורכי פיתוח בלבד)
+  const handleDeleteAllGuests = async () => {
+    // בקשת אישור מהמשתמש לפני מחיקה
+    if (!confirm('אזהרה: פעולה זו תמחק את כל האורחים ברשימה! האם אתה בטוח שברצונך להמשיך?')) {
+      return; // המשתמש ביטל את הפעולה
+    }
+    
+    // אישור נוסף למניעת מחיקה בטעות
+    if (!confirm('אישור סופי: כל האורחים יימחקו ולא ניתן יהיה לשחזר אותם. האם להמשיך?')) {
+      return; // המשתמש ביטל את הפעולה
+    }
+    
+    try {
+      // קריאה ל-API למחיקת כל האורחים
+      const response = await fetch(`/api/guests/delete-all?userId=${params.id}`, {
+        method: 'DELETE',
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to delete all guests');
+      }
+      
+      // ריקון רשימת האורחים במצב
+      setGuests([]);
+      
+      // הודעה למשתמש
+      alert(`כל האורחים נמחקו בהצלחה (${data.deletedCount} אורחים)`);
+    } catch (error) {
+      console.error('Failed to delete all guests:', error);
+      alert('שגיאה במחיקת כל האורחים. אנא נסה שוב.');
+    }
+  };
+
   if (!isAuthReady || isLoading) {
     return (
       <>
         <Head>
-          <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+          <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;500;700&display=swap" rel="stylesheet" />
         </Head>
         <Navbar />
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
           <div className="text-xl text-gray-600">טוען...</div>
-        </div>
+      </div>
       </>
     );
   }
@@ -222,14 +1086,65 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   return (
     <>
       <Head>
-        <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@300;400;500;700;800&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;500;700&display=swap" rel="stylesheet" />
         <style>{`
           body {
             font-family: 'M PLUS 1p', sans-serif;
           }
+          
+          @keyframes fadeIn {
+            from {
+              opacity: 0;
+              transform: translateY(10px);
+            }
+            to {
+              opacity: 1;
+              transform: translateY(0);
+            }
+          }
+          
+          .animate-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
+          }
         `}</style>
       </Head>
       <Navbar />
+      
+      {/* מסך הטעינה בזמן ייבוא */}
+      {importOverlay && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex flex-col items-center justify-center">
+          <div className="bg-white rounded-xl p-8 max-w-md w-full mx-4 text-center relative">
+            <h3 className="text-2xl font-bold text-gray-800 mb-4">מייבא רשימת אורחים</h3>
+            
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 border-t-4 border-blue-500 border-solid rounded-full animate-spin"></div>
+            </div>
+            
+            <div className="mb-4">
+              <div className="h-2 w-full bg-gray-200 rounded-full">
+                <div 
+                  className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                  style={{ width: `${importProgress.total ? (importProgress.current / importProgress.total) * 100 : 0}%` }}
+                ></div>
+              </div>
+              <div className="text-gray-600 mt-2">
+                {importProgress.current} מתוך {importProgress.total} אורחים
+              </div>
+            </div>
+            
+            {importProgress.currentName && (
+              <div className="text-gray-600">
+                מייבא כעת: {importProgress.currentName}
+              </div>
+            )}
+            
+            <p className="text-gray-600 mt-4">
+              אנא המתן... התהליך עשוי להימשך מספר דקות בהתאם לגודל הקובץ.
+            </p>
+          </div>
+        </div>
+      )}
+      
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-16 pb-16">
         <div className="max-w-7xl mx-auto px-6 py-8">
           <h1 className="text-5xl font-bold text-purple-800 text-center mb-3 font-mplus drop-shadow-sm">
@@ -243,32 +1158,32 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">
             <div className="bg-white rounded-xl shadow-md p-6 text-center transform hover:scale-105 transition-transform duration-300">
               <div className="text-3xl font-bold text-blue-600 mb-2">{stats.totalCount}</div>
-              <div className="text-gray-600 text-lg">סה&quot;כ אורחים</div>
+              <div className="text-gray-600 text-lg">סה&quot;כ הזמנות</div>
             </div>
             <div className="bg-white rounded-xl shadow-md p-6 text-center transform hover:scale-105 transition-transform duration-300">
               <div className="text-3xl font-bold text-green-600 mb-2">{stats.confirmedCount}</div>
-              <div className="text-gray-600 text-lg">אישרו הגעה</div>
+              <div className="text-gray-600 text-lg">הזמנות שאושרו</div>
             </div>
             <div className="bg-white rounded-xl shadow-md p-6 text-center transform hover:scale-105 transition-transform duration-300">
               <div className="text-3xl font-bold text-red-600 mb-2">{stats.declinedCount}</div>
-              <div className="text-gray-600 text-lg">לא מגיעים</div>
+              <div className="text-gray-600 text-lg">הזמנות שנדחו</div>
             </div>
             <div className="bg-white rounded-xl shadow-md p-6 text-center transform hover:scale-105 transition-transform duration-300">
               <div className="text-3xl font-bold text-yellow-600 mb-2">{stats.pendingCount}</div>
-              <div className="text-gray-600 text-lg">ממתינים לאישור</div>
+              <div className="text-gray-600 text-lg">הזמנות בהמתנה</div>
             </div>
           </div>
 
           <div className="bg-white rounded-xl shadow-md p-8 mb-10">
-            <div className="text-2xl font-bold text-gray-800 mb-4 text-center">סיכום מספר האורחים</div>
+            <div className="text-2xl font-bold text-gray-800 mb-4 text-center">סיכום מספר האנשים</div>
             <div className="flex flex-col md:flex-row justify-between text-center gap-6">
               <div className="flex-1 p-4 bg-purple-50 rounded-xl">
                 <div className="text-4xl font-bold text-purple-600 mb-2">{stats.totalGuests}</div>
-                <div className="text-gray-600 text-lg">סה&quot;כ אנשים</div>
+                <div className="text-gray-600 text-lg">סה&quot;כ אנשים שהוזמנו</div>
               </div>
               <div className="flex-1 p-4 bg-indigo-50 rounded-xl">
                 <div className="text-4xl font-bold text-indigo-600 mb-2">{stats.confirmedGuests}</div>
-                <div className="text-gray-600 text-lg">אנשים שאישרו</div>
+                <div className="text-gray-600 text-lg">אנשים שאישרו הגעה</div>
               </div>
             </div>
           </div>
@@ -304,16 +1219,144 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
               <option value="כלה">צד הכלה</option>
               <option value="משותף">משותף</option>
             </select>
-            <button
-              onClick={() => setIsAddingGuest(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center text-lg min-w-[160px] justify-center"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              הוסף אורח
-            </button>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsAddingGuest(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center text-lg min-w-[160px] justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+                </svg>
+                הוסף אורח
+              </button>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={handleExcelTemplateDownload}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center text-lg justify-center"
+                  title="הורד תבנית Excel למילוי"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  תבנית Excel
+                </button>
+                
+                <label className="relative">
+                  <input 
+                    type="file" 
+                    accept=".xlsx,.xls" 
+                    onChange={handleExcelImport}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={isImporting}
+                  />
+                  <span className={`bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg transition-colors flex items-center text-lg min-w-[160px] justify-center ${isImporting ? 'opacity-70 cursor-not-allowed' : ''}`}>
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0l-4 4m4-4v12" />
+                    </svg>
+                    {isImporting ? 'מייבא...' : 'ייבוא מ-Excel'}
+                  </span>
+                </label>
+                
+                <button
+                  onClick={handleDeleteAllGuests}
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center text-lg justify-center"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  מחק הכל
+                </button>
+              </div>
+            </div>
           </div>
+
+          {/* הודעת סטטוס ייבוא חדשה */}
+          {showImportStatus && importStatus && (
+            <div className="fixed bottom-5 right-5 z-50 max-w-md w-full animate-fade-in">
+              <div className={`relative rounded-lg shadow-lg p-4 border-r-4 ${
+                importStatus.error === 0 ? 'bg-white border-green-500' : 'bg-white border-yellow-500'
+              }`}>
+                <button 
+                  onClick={() => setShowImportStatus(false)}
+                  className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 transition-colors"
+                  aria-label="סגור"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+                
+                <div className="mb-3">
+                  <h3 className={`text-lg font-bold mb-1 ${
+                    importStatus.error === 0 ? 'text-green-600' : 'text-yellow-600'
+                  }`}>
+                    {importStatus.error === 0 ? 'הייבוא הסתיים בהצלחה' : 'הייבוא הסתיים עם שגיאות'}
+                  </h3>
+                  
+                  <div className="flex items-start space-x-3 space-x-reverse">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+                      importStatus.error === 0 ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'
+                    }`}>
+                      {importStatus.error === 0 ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1">
+                      <p className="text-gray-700 mb-1">
+                        <span className="font-semibold text-green-600">{importStatus.success}</span> אורחים נוספו בהצלחה
+                        {importStatus.error > 0 && (
+                          <span className="mr-2">
+                            <span className="font-semibold text-red-600">{importStatus.error}</span> אורחים לא נוספו
+                          </span>
+                        )}
+                      </p>
+                      
+                      {/* פירוט השגיאות */}
+                      {importStatus.error > 0 && importStatus.errorDetails && (
+                        <div className="mt-2 text-sm bg-gray-50 p-2 rounded">
+                          <p className="font-semibold text-gray-700 mb-1">פירוט השגיאות:</p>
+                          <ul className="text-gray-600 space-y-1 pr-4">
+                            {importStatus.errorDetails.missingName! > 0 && (
+                              <li>• {importStatus.errorDetails.missingName} שורות ללא שם אורח</li>
+                            )}
+                            {importStatus.errorDetails.invalidPhone! > 0 && (
+                              <li>• {importStatus.errorDetails.invalidPhone} שורות עם מספר טלפון לא תקין</li>
+                            )}
+                            {importStatus.errorDetails.apiErrors! > 0 && (
+                              <li>• {importStatus.errorDetails.apiErrors} שגיאות תקשורת עם השרת</li>
+                            )}
+                            {importStatus.errorDetails.otherErrors! > 0 && (
+                              <li>• {importStatus.errorDetails.otherErrors} שגיאות אחרות</li>
+                            )}
+                          </ul>
+                          
+                          <div className="mt-2">
+                            <button
+                              onClick={handleExcelTemplateDownload}
+                              className="text-blue-600 hover:text-blue-800 transition-colors text-sm flex items-center"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              הורד תבנית אקסל
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* טבלת האורחים */}
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
@@ -375,9 +1418,9 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                         {editingGuestId === guest.id ? (
                           <input
                             type="number"
-                            min="1"
+                            min="0"
                             value={guest.numberOfGuests}
-                            onChange={(e) => handleEditGuest({...guest, numberOfGuests: parseInt(e.target.value) || 1})}
+                            onChange={(e) => handleEditGuest({...guest, numberOfGuests: parseInt(e.target.value) || 0})}
                             className="w-20 p-2 border border-gray-300 rounded text-center text-lg"
                           />
                         ) : (
@@ -505,9 +1548,9 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                       <td className="px-6 py-5 whitespace-nowrap text-center">
                         <input
                           type="number"
-                          min="1"
+                          min="0"
                           value={newGuest.numberOfGuests}
-                          onChange={(e) => setNewGuest({...newGuest, numberOfGuests: parseInt(e.target.value) || 1})}
+                          onChange={(e) => setNewGuest({...newGuest, numberOfGuests: parseInt(e.target.value) || 0})}
                           className="w-20 p-2 border border-gray-300 rounded text-center text-lg"
                         />
                       </td>
@@ -577,7 +1620,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                             className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors"
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293-1.293a1 1 0 00-1.414-1.414L10 10l-1.293-1.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 000 1.414z" clipRule="evenodd" />
                             </svg>
                           </button>
                         </div>
