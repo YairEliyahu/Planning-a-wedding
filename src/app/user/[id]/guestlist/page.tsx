@@ -8,13 +8,15 @@ import Head from 'next/head';
 import * as XLSX from 'xlsx';
 
 interface Guest {
-  id: string;
+  _id: string;
   name: string;
-  phoneNumber: string;
+  phoneNumber?: string;
   numberOfGuests: number;
   side: 'חתן' | 'כלה' | 'משותף';
   isConfirmed: boolean | null;
   notes: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 interface UserProfile {
@@ -41,14 +43,15 @@ interface UserProfile {
   partnerGender: 'male' | 'female';
 }
 
+type NewGuest = Omit<Guest, '_id' | 'createdAt' | 'updatedAt'>;
+
 export default function GuestlistPage({ params }: { params: { id: string } }) {
   const { user, isAuthReady } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [newGuest, setNewGuest] = useState<Guest>({
-    id: '',
+  const [newGuest, setNewGuest] = useState<NewGuest>({
     name: '',
     phoneNumber: '',
     numberOfGuests: 0,
@@ -195,7 +198,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       for (const guest of exampleGuests) {
         try {
           // מחיקה ישירה מה-API, ללא אישור משתמש
-          const response = await fetch(`/api/guests/${guest.id}`, {
+          const response = await fetch(`/api/guests/${guest._id}`, {
             method: 'DELETE',
           });
           
@@ -205,7 +208,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
           }
           
           // הסרת האורח מהרשימה המקומית
-          const index = updatedList.findIndex(g => g.id === guest.id);
+          const index = updatedList.findIndex(g => g._id === guest._id);
           if (index !== -1) updatedList.splice(index, 1);
         } catch (error) {
           console.error(`שגיאה במחיקת אורח דוגמה ${guest.name}:`, error);
@@ -249,7 +252,6 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       
       // Reset the form
       setNewGuest({
-        id: '',
         name: '',
         phoneNumber: '',
         numberOfGuests: 0,
@@ -266,9 +268,9 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
   const handleEditGuest = async (guest: Guest) => {
     try {
-      if (editingGuestId === guest.id) {
+      if (editingGuestId === guest._id) {
         // Call the API to update the guest
-        const response = await fetch(`/api/guests/${guest.id}`, {
+        const response = await fetch(`/api/guests/${guest._id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -283,10 +285,10 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         }
         
         // Update the guest in the state
-        setGuests(guests.map(g => g.id === guest.id ? data.guest : g));
+        setGuests(guests.map(g => g._id === guest._id ? data.guest : g));
         setEditingGuestId(null);
       } else {
-        setEditingGuestId(guest.id);
+        setEditingGuestId(guest._id);
       }
     } catch (error) {
       console.error('Failed to update guest:', error);
@@ -308,7 +310,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         }
         
         // Remove the guest from the state
-        setGuests(guests.filter(guest => guest.id !== guestId));
+        setGuests(guests.filter(guest => guest._id !== guestId));
       } catch (error) {
         console.error('Failed to delete guest:', error);
         alert('Failed to delete guest. Please try again.');
@@ -319,7 +321,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const handleConfirmGuest = async (guestId: string, status: boolean | null) => {
     try {
       // Find the guest to update
-      const guestToUpdate = guests.find(guest => guest.id === guestId);
+      const guestToUpdate = guests.find(guest => guest._id === guestId);
       if (!guestToUpdate) return;
       
       // Create updated guest with new status
@@ -342,7 +344,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       
       // Update the guest in the state
       setGuests(guests.map(guest => 
-        guest.id === guestId ? { ...guest, isConfirmed: status } : guest
+        guest._id === guestId ? { ...guest, isConfirmed: status } : guest
       ));
     } catch (error) {
       console.error('Failed to update guest status:', error);
@@ -379,7 +381,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       if (sideFilter !== 'all' && guest.side !== sideFilter) return false;
 
       // סינון לפי חיפוש
-      if (searchQuery && !guest.name.includes(searchQuery) && !guest.phoneNumber.includes(searchQuery)) return false;
+      if (searchQuery && !guest.name.includes(searchQuery) && !guest.phoneNumber?.includes(searchQuery)) return false;
 
       return true;
     });
@@ -892,7 +894,9 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
               numberOfGuests,
               side,
               isConfirmed: null, // בדרך כלל אורחים מיובאים מסומנים כממתינים לאישור
-              notes
+              notes,
+              createdAt: new Date(),
+              updatedAt: new Date()
             };
             
             console.log('Sending guest data:', guestData);
@@ -1389,9 +1393,9 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {filteredGuests.map(guest => (
-                    <tr key={guest.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={guest._id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-5 whitespace-nowrap">
-                        {editingGuestId === guest.id ? (
+                        {editingGuestId === guest._id ? (
                           <input
                             type="text"
                             value={guest.name}
@@ -1403,7 +1407,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                         )}
                       </td>
                       <td className="px-6 py-5 whitespace-nowrap">
-                        {editingGuestId === guest.id ? (
+                        {editingGuestId === guest._id ? (
                           <input
                             type="text"
                             value={guest.phoneNumber}
@@ -1415,7 +1419,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                         )}
                       </td>
                       <td className="px-6 py-5 whitespace-nowrap text-center">
-                        {editingGuestId === guest.id ? (
+                        {editingGuestId === guest._id ? (
                           <input
                             type="number"
                             min="0"
@@ -1428,7 +1432,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                         )}
                       </td>
                       <td className="px-6 py-5 whitespace-nowrap text-center">
-                        {editingGuestId === guest.id ? (
+                        {editingGuestId === guest._id ? (
                           <select
                             value={guest.side}
                             onChange={(e) => handleEditGuest({...guest, side: e.target.value as 'חתן' | 'כלה' | 'משותף'})}
@@ -1451,7 +1455,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                       <td className="px-6 py-5 whitespace-nowrap text-center">
                         <div className="grid grid-cols-3 gap-4 w-[160px] mx-auto">
                           <button
-                            onClick={() => handleConfirmGuest(guest.id, true)}
+                            onClick={() => handleConfirmGuest(guest._id, true)}
                             className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                             title="אישר/ה הגעה"
                           >
@@ -1460,7 +1464,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleConfirmGuest(guest.id, false)}
+                            onClick={() => handleConfirmGuest(guest._id, false)}
                             className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                             title="לא מגיע/ה"
                           >
@@ -1469,7 +1473,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleConfirmGuest(guest.id, null)}
+                            onClick={() => handleConfirmGuest(guest._id, null)}
                             className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                             title="ממתין/ה לאישור"
                           >
@@ -1480,7 +1484,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                         </div>
                       </td>
                       <td className="px-6 py-5 whitespace-nowrap">
-                        {editingGuestId === guest.id ? (
+                        {editingGuestId === guest._id ? (
                           <input
                             type="text"
                             value={guest.notes}
@@ -1492,7 +1496,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                         )}
                       </td>
                       <td className="px-6 py-5 whitespace-nowrap text-center">
-                        {editingGuestId === guest.id ? (
+                        {editingGuestId === guest._id ? (
                           <button 
                             onClick={() => handleEditGuest(guest)} 
                             className="text-green-600 hover:text-green-900 text-lg font-medium"
@@ -1510,7 +1514,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                               </svg>
                             </button>
                             <button 
-                              onClick={() => handleDeleteGuest(guest.id)} 
+                              onClick={() => handleDeleteGuest(guest._id)} 
                               className="text-red-600 hover:text-red-900 p-1.5 hover:bg-red-100 rounded-full transition-colors"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">

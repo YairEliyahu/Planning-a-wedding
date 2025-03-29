@@ -1,17 +1,87 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [loadingMessage, setLoadingMessage] = useState('');
+
+  // בדיקת פרמטרים של הכתובת בטעינת העמוד
+  useEffect(() => {
+    const errorParam = searchParams.get('error');
+    if (errorParam) {
+      setLoadingMessage('');
+      setLoadingProgress(0);
+      setIsGoogleLoading(false);
+      
+      // תרגום קודי שגיאה להודעות ידידותיות
+      const errorMessages: Record<string, string> = {
+        'MissingGoogleConfig': 'חסרות הגדרות לחיבור עם גוגל',
+        'NoCode': 'לא התקבל קוד אימות מגוגל',
+        'NoEmail': 'לא התקבל מייל מחשבון הגוגל',
+        'CallbackFailed': 'שגיאה בתהליך התחברות עם גוגל',
+        'GoogleAuthInitFailed': 'לא ניתן להתחיל תהליך התחברות עם גוגל'
+      };
+      
+      setError(errorMessages[errorParam] || 'שגיאה בהתחברות');
+    }
+  }, [searchParams]);
+
+  // הגדרת אנימציית טעינה בעת התחברות עם גוגל
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    
+    if (isGoogleLoading) {
+      // התחלת אנימציית התקדמות
+      setLoadingProgress(5);
+      setLoadingMessage('מתחבר לשירותי גוגל...');
+      
+      // שלבי תהליך עם הודעות מתאימות
+      const stages = [
+        { time: 1000, progress: 10, message: 'מאמת פרטים...' },
+        { time: 3000, progress: 15, message: 'מתחבר למסד הנתונים...' },
+        { time: 6000, progress: 25, message: 'מחפש חשבון משתמש...' },
+        { time: 10000, progress: 40, message: 'מכין נתוני התחברות...' },
+        { time: 15000, progress: 60, message: 'מכין את האפליקציה...' },
+        { time: 20000, progress: 80, message: 'כמעט שם...' },
+        { time: 30000, progress: 90, message: 'ממתין לסיום ההתחברות...' }
+      ];
+      
+      // הגדרת התקדמות עבור כל שלב
+      stages.forEach(stage => {
+        setTimeout(() => {
+          if (isGoogleLoading) { // בדיקה שעדיין בתהליך טעינה
+            setLoadingProgress(stage.progress);
+            setLoadingMessage(stage.message);
+          }
+        }, stage.time);
+      });
+      
+      // טיימר אבטחה - אם לא הסתיים תוך 40 שניות, בטל
+      timer = setTimeout(() => {
+        if (isGoogleLoading) {
+          setIsGoogleLoading(false);
+          setLoadingProgress(0);
+          setError('ההתחברות לקחה יותר מדי זמן. נסה שנית.');
+        }
+      }, 40000);
+    }
+    
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [isGoogleLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +109,9 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
+    setIsGoogleLoading(true);
+    setError('');
+    // הניווט מתבצע במקביל להצגת מחוון ההתקדמות
     window.location.href = '/api/auth/google';
   };
 
@@ -52,6 +125,20 @@ export default function LoginPage() {
         <h1 style={styles.title}>התחברות</h1>
         
         {error && <div style={styles.error}>{error}</div>}
+        
+        {isGoogleLoading && (
+          <div style={styles.loadingContainer}>
+            <div style={styles.progressBarOuter}>
+              <div 
+                style={{
+                  ...styles.progressBarInner,
+                  width: `${loadingProgress}%`
+                }}
+              />
+            </div>
+            <div style={styles.loadingMessage}>{loadingMessage}</div>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} style={styles.form}>
           <div style={styles.inputGroup}>
@@ -81,7 +168,7 @@ export default function LoginPage() {
           <button 
             type="submit" 
             style={styles.button}
-            disabled={isLoading}
+            disabled={isLoading || isGoogleLoading}
           >
             {isLoading ? 'מתחבר...' : 'התחבר'}
           </button>
@@ -94,13 +181,15 @@ export default function LoginPage() {
         <button 
           onClick={handleGoogleLogin} 
           style={{ ...styles.socialButton, ...styles.googleButton }}
+          disabled={isLoading || isGoogleLoading}
         >
-          התחבר עם Google
+          {isGoogleLoading ? 'מתחבר לגוגל...' : 'התחבר עם Google'}
         </button>
 
         <button 
           onClick={handleFacebookLogin} 
           style={{ ...styles.socialButton, ...styles.facebookButton }}
+          disabled={isLoading || isGoogleLoading}
         >
           התחבר עם Facebook
         </button>
@@ -238,5 +327,27 @@ const styles = {
     '&:hover': {
       textDecoration: 'underline',
     },
+  },
+  loadingContainer: {
+    marginBottom: '1.5rem',
+  },
+  progressBarOuter: {
+    width: '100%',
+    height: '6px',
+    backgroundColor: '#f0f0f0',
+    borderRadius: '3px',
+    overflow: 'hidden',
+    marginBottom: '0.5rem',
+  },
+  progressBarInner: {
+    height: '100%',
+    backgroundColor: '#0070f3',
+    borderRadius: '3px',
+    transition: 'width 0.5s ease-in-out',
+  },
+  loadingMessage: {
+    fontSize: '0.85rem',
+    color: '#666',
+    textAlign: 'center' as const,
   },
 };

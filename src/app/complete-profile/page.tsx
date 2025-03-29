@@ -17,17 +17,25 @@ interface User {
   fullName: string;
   email: string;
   age?: string;
-  gender?: string;
+  gender?: 'Male' | 'Female' | 'Other';
   location?: string;
-  phoneNumber?: string;
+  phone?: string;
   idNumber?: string;
+  
+  // Partner Details
   partnerName?: string;
   partnerEmail?: string;
+  partnerPhone?: string;
   partnerIdNumber?: string;
+  partnerGender?: 'Male' | 'Female' | 'Other';
+  
+  // Wedding Details
   weddingDate?: string;
   expectedGuests?: string;
   weddingLocation?: string;
   budget?: string;
+  
+  // Wedding Preferences
   preferences?: {
     venue: boolean;
     catering: boolean;
@@ -35,7 +43,14 @@ interface User {
     music: boolean;
     design: boolean;
   };
+  
+  // Additional Wedding Details
+  venueType?: 'garden' | 'nature' | '';
+  timeOfDay?: 'evening' | 'afternoon' | '';
+  locationPreference?: 'south' | 'center' | 'north' | '';
+  
   isProfileComplete?: boolean;
+  authProvider?: string;
 }
 
 interface FormData {
@@ -43,9 +58,9 @@ interface FormData {
   fullName: string;
   email: string;
   age: string;
-  gender: string;
+  gender: '' | 'Male' | 'Female' | 'Other';
   location: string;
-  phoneNumber: string;
+  phone: string;
   idNumber: string;
   
   // Partner Details
@@ -53,19 +68,27 @@ interface FormData {
   partnerEmail: string;
   partnerPhone: string;
   partnerIdNumber: string;
+  partnerGender: '' | 'Male' | 'Female' | 'Other';
   
   // Wedding Details
   weddingDate: string;
   expectedGuests: string;
   weddingLocation: string;
   budget: string;
+  
+  // Wedding Preferences
   preferences: {
     venue: boolean;
     catering: boolean;
     photography: boolean;
     music: boolean;
     design: boolean;
-  }
+  };
+  
+  // Additional Wedding Details
+  venueType: 'garden' | 'nature' | '';
+  timeOfDay: 'evening' | 'afternoon' | '';
+  locationPreference: 'south' | 'center' | 'north' | '';
 }
 
 export default function CompleteProfile() {
@@ -76,88 +99,89 @@ export default function CompleteProfile() {
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
     // Personal Details
-    fullName: user?.fullName || '',
-    email: user?.email || '',
-    age: user?.age || '',
-    gender: user?.gender || '',
-    location: user?.location || '',
-    phoneNumber: user?.phoneNumber || '',
-    idNumber: user?.idNumber || '',
+    fullName: '',
+    email: '',
+    age: '',
+    gender: '',
+    location: '',
+    phone: '',
+    idNumber: '',
     
     // Partner Details
-    partnerName: user?.partnerName || '',
-    partnerEmail: user?.partnerEmail || '',
-    partnerPhone: user?.partnerPhone || '',
-    partnerIdNumber: user?.partnerIdNumber || '',
+    partnerName: '',
+    partnerEmail: '',
+    partnerPhone: '',
+    partnerIdNumber: '',
+    partnerGender: '',
     
     // Wedding Details
-    weddingDate: user?.weddingDate ? new Date(user.weddingDate).toISOString().split('T')[0] : '',
-    expectedGuests: user?.expectedGuests?.toString() || '',
-    weddingLocation: user?.weddingLocation || '',
-    budget: user?.budget?.toString() || '',
+    weddingDate: '',
+    expectedGuests: '',
+    weddingLocation: '',
+    budget: '',
     preferences: {
-      venue: user?.preferences?.venue || false,
-      catering: user?.preferences?.catering || false,
-      photography: user?.preferences?.photography || false,
-      music: user?.preferences?.music || false,
-      design: user?.preferences?.design || false
-    }
+      venue: false,
+      catering: false,
+      photography: false,
+      music: false,
+      design: false
+    },
+    venueType: '',
+    timeOfDay: '',
+    locationPreference: ''
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const initializeUser = async () => {
+    const loadUserData = async () => {
+      if (!user?._id) return;
+
       try {
-        const token = searchParams?.get('token');
-        const userJson = searchParams?.get('user');
+        const response = await fetch(`/api/user/${user._id}`);
+        const data = await response.json();
         
-        if (token && userJson) {
-          const userData = JSON.parse(userJson);
-          await login(token, userData);
-          
-          if (userData) {
-            setFormData(prev => ({
-              ...prev,
-              fullName: userData.fullName || '',
-              email: userData.email || '',
-              age: userData.age || '',
-              gender: userData.gender || '',
-              location: userData.location || '',
-              phoneNumber: userData.phoneNumber || '',
-              idNumber: userData.idNumber || '',
-              partnerName: userData.partnerName || '',
-              partnerEmail: userData.partnerEmail || '',
-              partnerPhone: userData.partnerPhone || '',
-              partnerIdNumber: userData.partnerIdNumber || '',
-              weddingDate: userData.weddingDate ? new Date(userData.weddingDate).toISOString().split('T')[0] : '',
-              expectedGuests: userData.expectedGuests?.toString() || '',
-              weddingLocation: userData.weddingLocation || '',
-              budget: userData.budget?.toString() || '',
-              preferences: {
-                venue: userData.preferences?.venue || false,
-                catering: userData.preferences?.catering || false,
-                photography: userData.preferences?.photography || false,
-                music: userData.preferences?.music || false,
-                design: userData.preferences?.design || false
-              }
-            }));
-          }
-          
-          const newUrl = new URL(window.location.href);
-          newUrl.searchParams.delete('token');
-          newUrl.searchParams.delete('user');
-          window.history.replaceState({}, '', newUrl.toString());
+        if (data.user) {
+          console.log('Loaded user data:', data.user); // Debug log
+          setFormData(prev => ({
+            ...prev,
+            fullName: data.user.fullName || '',
+            email: data.user.email || '',
+            age: data.user.age || '',
+            gender: data.user.gender || '',
+            location: data.user.location || '',
+            phone: data.user.phone || '', // Phone number from DB
+            idNumber: data.user.idNumber || '',
+            partnerName: data.user.partnerName || '',
+            partnerEmail: data.user.partnerEmail || '',
+            partnerPhone: data.user.partnerPhone || '',
+            partnerIdNumber: data.user.partnerIdNumber || '',
+            partnerGender: data.user.partnerGender || '',
+            weddingDate: data.user.weddingDate ? new Date(data.user.weddingDate).toISOString().split('T')[0] : '',
+            expectedGuests: data.user.expectedGuests?.toString() || '',
+            weddingLocation: data.user.weddingLocation || '',
+            budget: data.user.budget?.toString() || '',
+            preferences: {
+              venue: data.user.preferences?.venue || false,
+              catering: data.user.preferences?.catering || false,
+              photography: data.user.preferences?.photography || false,
+              music: data.user.preferences?.music || false,
+              design: data.user.preferences?.design || false
+            },
+            venueType: data.user.venueType || '',
+            timeOfDay: data.user.timeOfDay || '',
+            locationPreference: data.user.locationPreference || ''
+          }));
         }
       } catch (error) {
-        console.error('Error processing user data:', error);
+        console.error('Error loading user data:', error);
       } finally {
         setIsInitializing(false);
       }
     };
 
-    initializeUser();
-  }, [searchParams, login]);
+    loadUserData();
+  }, [user?._id]);
 
   useEffect(() => {
     if (!isInitializing && !user) {
@@ -347,9 +371,9 @@ export default function CompleteProfile() {
                         required
                       >
                         <option value="">בחר מגדר</option>
-                        <option value="male">זכר</option>
-                        <option value="female">נקבה</option>
-                        <option value="other">אחר</option>
+                        <option value="Male">זכר</option>
+                        <option value="Female">נקבה</option>
+                        <option value="Other">אחר</option>
                       </select>
                     </div>
                     <div className="space-y-2">
@@ -364,16 +388,23 @@ export default function CompleteProfile() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="phoneNumber">מספר טלפון</Label>
-                      <Input
-                        id="phoneNumber"
-                        name="phoneNumber"
-                        type="tel"
-                        value={formData.phoneNumber}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
+                      <Label htmlFor="phone">מספר טלפון</Label>
+                      <div className="relative">
+                        <Input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          value={formData.phone}
+                          onChange={handleChange}
+                          className="text-right"
+                          required
+                        />
+                        {user?.phone && formData.phone !== user.phone && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            מספר טלפון מקורי: {user.phone}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="idNumber">תעודת זהות</Label>
@@ -392,7 +423,7 @@ export default function CompleteProfile() {
                 {currentStep === 2 && (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="partnerName">שם בלא</Label>
+                      <Label htmlFor="partnerName">שם בן/בת הזוג</Label>
                       <Input
                         id="partnerName"
                         name="partnerName"
@@ -436,6 +467,22 @@ export default function CompleteProfile() {
                         className="text-right"
                         required
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="partnerGender">מגדר</Label>
+                      <select
+                        id="partnerGender"
+                        name="partnerGender"
+                        value={formData.partnerGender}
+                        onChange={handleChange}
+                        className="w-full p-2 border rounded-md text-right"
+                        required
+                      >
+                        <option value="">בחר מגדר</option>
+                        <option value="Male">זכר</option>
+                        <option value="Female">נקבה</option>
+                        <option value="Other">אחר</option>
+                      </select>
                     </div>
                   </div>
                 )}
@@ -492,6 +539,52 @@ export default function CompleteProfile() {
                         required
                         className="text-right"
                       />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="venueType">סוג המקום</Label>
+                      <select
+                        id="venueType"
+                        name="venueType"
+                        value={formData.venueType}
+                        onChange={handleChange}
+                        className="w-full p-2 border rounded-md text-right"
+                        required
+                      >
+                        <option value="">בחר את סוג המקום</option>
+                        <option value="garden">גן אירועים</option>
+                        <option value="nature">אירוע בטבע</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="timeOfDay">שעת האירוע</Label>
+                      <select
+                        id="timeOfDay"
+                        name="timeOfDay"
+                        value={formData.timeOfDay}
+                        onChange={handleChange}
+                        className="w-full p-2 border rounded-md text-right"
+                        required
+                      >
+                        <option value="">בחר את שעת האירוע</option>
+                        <option value="evening">חתונת ערב</option>
+                        <option value="afternoon">חתונת צהריים</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="locationPreference">אזור בארץ</Label>
+                      <select
+                        id="locationPreference"
+                        name="locationPreference"
+                        value={formData.locationPreference}
+                        onChange={handleChange}
+                        className="w-full p-2 border rounded-md text-right"
+                        required
+                      >
+                        <option value="">בחר את האזור המועדף</option>
+                        <option value="south">דרום</option>
+                        <option value="center">מרכז</option>
+                        <option value="north">צפון</option>
+                      </select>
                     </div>
                     <div className="space-y-4">
                       <Label>במה תרצו שנעזור לכם?</Label>

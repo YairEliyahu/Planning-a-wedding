@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 
 export interface User {
@@ -45,17 +45,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
+    console.time('auth-initialization');
+    
     const initializeAuth = async () => {
       try {
         console.log('Initializing auth...');
-        const token = localStorage.getItem('token');
-        const storedUser = localStorage.getItem('user');
+        const [token, storedUser] = await Promise.all([
+          Promise.resolve(localStorage.getItem('token')),
+          Promise.resolve(localStorage.getItem('user'))
+        ]);
 
         if (token && storedUser) {
           console.log('Found stored user data');
-          const userData = JSON.parse(storedUser);
-          setUser(userData);
-          console.log('User data set:', userData._id);
+          try {
+            const userData = JSON.parse(storedUser);
+            setUser(userData);
+            console.log('User data set:', userData._id);
+          } catch (parseError) {
+            console.error('Error parsing user data:', parseError);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+          }
         } else {
           console.log('No stored user data found');
         }
@@ -66,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } finally {
         console.log('Auth initialization complete');
         setIsAuthReady(true);
+        console.timeEnd('auth-initialization');
       }
     };
 
@@ -74,10 +85,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (token: string, userData: User) => {
     try {
+      console.time('user-login');
       console.log('Logging in user:', userData._id);
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(userData));
+      
+      await Promise.all([
+        Promise.resolve(localStorage.setItem('token', token)),
+        Promise.resolve(localStorage.setItem('user', JSON.stringify(userData)))
+      ]);
+      
       setUser(userData);
+      console.timeEnd('user-login');
     } catch (error) {
       console.error('Error during login:', error);
       throw error;
@@ -97,8 +114,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const contextValue = useMemo(() => ({
+    user,
+    isAuthReady,
+    login,
+    logout
+  }), [user, isAuthReady, router]);
+
   return (
-    <AuthContext.Provider value={{ user, isAuthReady, login, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

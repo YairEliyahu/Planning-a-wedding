@@ -1,43 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectToDatabase from '@/utils/dbConnect';
 import User from '@/models/User';
-import mongoose from 'mongoose';
-
-// Define the preferences schema
-const weddingPreferencesSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
-    unique: true
-  },
-  venueType: {
-    type: String,
-    enum: ['garden', 'nature', ''],
-    default: ''
-  },
-  timeOfDay: {
-    type: String,
-    enum: ['evening', 'afternoon', ''],
-    default: ''
-  },
-  location: {
-    type: String,
-    enum: ['south', 'center', 'north', ''],
-    default: ''
-  },
-  guestsCount: {
-    type: String,
-    default: ''
-  },
-  estimatedBudget: {
-    type: String,
-    default: ''
-  }
-});
-
-// Create or get the model
-const WeddingPreferences = mongoose.models.WeddingPreferences || mongoose.model('WeddingPreferences', weddingPreferencesSchema);
+import WeddingPreferences from '@/models/WeddingPreferences';
 
 export async function GET(
   request: Request,
@@ -46,24 +10,27 @@ export async function GET(
   try {
     await connectToDatabase();
 
-    // Find the preferences for the user
+    // מצא את העדפות החתונה של המשתמש
     const preferences = await WeddingPreferences.findOne({ userId: params.id });
+    const user = await User.findById(params.id);
     
-    if (!preferences) {
-      // If no preferences exist, return default values
-      return NextResponse.json({
-        success: true,
-        preferences: {
-          venueType: '',
-          timeOfDay: '',
-          location: '',
-          guestsCount: '',
-          estimatedBudget: ''
-        }
-      });
+    if (!user) {
+      return NextResponse.json(
+        { success: false, message: 'User not found' },
+        { status: 404 }
+      );
     }
 
-    return NextResponse.json({ success: true, preferences });
+    // החזר את העדפות החתונה בפורמט הנדרש
+    const response = {
+      venueType: preferences?.venueType || '',
+      timeOfDay: preferences?.timeOfDay || '',
+      locationPreference: preferences?.location || '',
+      guestsCount: user.expectedGuests || '',
+      estimatedBudget: user.budget || ''
+    };
+
+    return NextResponse.json({ success: true, preferences: response });
   } catch (error) {
     console.error('Error fetching wedding preferences:', error);
     return NextResponse.json(
@@ -81,8 +48,32 @@ export async function POST(
     await connectToDatabase();
     const data = await request.json();
 
-    // Validate the user exists
+    console.log('Updating wedding preferences for user:', params.id, 'with data:', data);
+
+    // נסה למצוא העדפות קיימות
+    let preferences = await WeddingPreferences.findOne({ userId: params.id });
+
+    if (preferences) {
+      // עדכן את ההעדפות הקיימות
+      preferences.venueType = data.venueType;
+      preferences.timeOfDay = data.timeOfDay;
+      preferences.location = data.locationPreference;
+      await preferences.save();
+    } else {
+      // צור העדפות חדשות
+      preferences = await WeddingPreferences.create({
+        userId: params.id,
+        venueType: data.venueType,
+        timeOfDay: data.timeOfDay,
+        location: data.locationPreference
+      });
+    }
+
+    console.log('Updated/Created preferences:', preferences);
+
+    // קבל את נתוני המשתמש לשדות הנוספים
     const user = await User.findById(params.id);
+
     if (!user) {
       return NextResponse.json(
         { success: false, message: 'User not found' },
@@ -90,21 +81,16 @@ export async function POST(
       );
     }
 
-    // Update or create the preferences
-    const preferences = await WeddingPreferences.findOneAndUpdate(
-      { userId: params.id },
-      {
-        userId: params.id,
-        venueType: data.venueType,
-        timeOfDay: data.timeOfDay,
-        location: data.location,
-        guestsCount: data.guestsCount,
-        estimatedBudget: data.estimatedBudget
-      },
-      { upsert: true, new: true }
-    );
+    // החזר את התשובה בפורמט הנדרש
+    const response = {
+      venueType: preferences.venueType,
+      timeOfDay: preferences.timeOfDay,
+      locationPreference: preferences.location,
+      guestsCount: user.expectedGuests || '',
+      estimatedBudget: user.budget || ''
+    };
 
-    return NextResponse.json({ success: true, preferences });
+    return NextResponse.json({ success: true, preferences: response });
   } catch (error) {
     console.error('Error saving wedding preferences:', error);
     return NextResponse.json(

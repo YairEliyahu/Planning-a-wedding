@@ -6,16 +6,31 @@ import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 
 interface UserProfile {
+  _id: string;
   fullName: string;
-  gender: 'male' | 'female';
-  partnerName: string;
-  partnerGender: 'male' | 'female';
+  email: string;
+  gender?: string;
+  partnerName?: string;
+  partnerGender?: string;
+  weddingDate?: string;
+  expectedGuests?: string;
+  budget?: string;
+  venueType: 'garden' | 'nature' | '';
+  timeOfDay: 'evening' | 'afternoon' | '';
+  locationPreference: 'south' | 'center' | 'north' | '';
+  preferences?: {
+    venue: boolean;
+    catering: boolean;
+    photography: boolean;
+    music: boolean;
+    design: boolean;
+  };
 }
 
 interface WeddingPreferences {
   venueType: 'garden' | 'nature' | '';
   timeOfDay: 'evening' | 'afternoon' | '';
-  location: 'south' | 'center' | 'north' | '';
+  locationPreference: 'south' | 'center' | 'north' | '';
   guestsCount: string;
   estimatedBudget: string;
 }
@@ -27,35 +42,53 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
   const [preferences, setPreferences] = useState<WeddingPreferences>({
     venueType: '',
     timeOfDay: '',
-    location: '',
+    locationPreference: '',
     guestsCount: '',
     estimatedBudget: '',
   });
   const [isLoading, setIsLoading] = useState(true);
   const [savedPreferences, setSavedPreferences] = useState<WeddingPreferences | null>(null);
 
-  const fetchProfile = async () => {
+  const fetchProfileAndPreferences = async () => {
     try {
-      const response = await fetch(`/api/user/${params.id}`);
-      const data = await response.json();
-      if (response.ok) {
-        setProfile(data.user);
+      // קריאה לפרופיל המשתמש
+      const profileResponse = await fetch(`/api/user/${params.id}`);
+      const profileData = await profileResponse.json();
+      
+      console.log('Profile data:', profileData);
+      
+      if (!profileResponse.ok) {
+        throw new Error('Failed to fetch profile');
       }
+      
+      setProfile(profileData.user);
+      
+      // קריאה להעדפות החתונה
+      const preferencesResponse = await fetch(`/api/wedding-preferences/${params.id}`);
+      const preferencesData = await preferencesResponse.json();
+      
+      console.log('Wedding preferences data:', preferencesData);
+      
+      // שילוב המידע מהפרופיל ומהעדפות החתונה
+      const newPreferences = {
+        // העדפות חתונה מהטבלה הנפרדת
+        venueType: preferencesData?.preferences?.venueType || profileData.user.venueType || '',
+        timeOfDay: preferencesData?.preferences?.timeOfDay || profileData.user.timeOfDay || '',
+        locationPreference: preferencesData?.preferences?.locationPreference || profileData.user.locationPreference || '',
+        // נתונים מפרופיל המשתמש
+        guestsCount: profileData.user.expectedGuests || '',
+        estimatedBudget: profileData.user.budget || '',
+      };
+      
+      console.log('Combined preferences:', newPreferences);
+      
+      setPreferences(newPreferences);
+      setSavedPreferences(newPreferences);
+      
     } catch (error) {
-      console.error('Failed to fetch profile:', error);
-    }
-  };
-
-  const fetchPreferences = async () => {
-    try {
-      const response = await fetch(`/api/wedding-preferences/${params.id}`);
-      const data = await response.json();
-      if (response.ok && data.preferences) {
-        setSavedPreferences(data.preferences);
-        setPreferences(data.preferences);
-      }
-    } catch (error) {
-      console.error('Failed to fetch preferences:', error);
+      console.error('Failed to fetch data:', error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -80,11 +113,7 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
         return;
       }
 
-      await Promise.all([
-        fetchProfile(),
-        fetchPreferences()
-      ]);
-      setIsLoading(false);
+      await fetchProfileAndPreferences();
     };
 
     checkAuth();
@@ -101,20 +130,57 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await fetch(`/api/wedding-preferences/${params.id}`, {
+      console.log('Submitting preferences:', preferences);
+      
+      // עדכון פרטי המשתמש (מספר אורחים ותקציב)
+      const userResponse = await fetch(`/api/user/${params.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          expectedGuests: preferences.guestsCount,
+          budget: preferences.estimatedBudget,
+        }),
+      });
+
+      if (!userResponse.ok) {
+        throw new Error('Failed to update user profile');
+      }
+
+      const userResult = await userResponse.json();
+      console.log('User update result:', userResult);
+
+      // עדכון העדפות החתונה (מיקום, שעה ואזור)
+      const preferencesResponse = await fetch(`/api/wedding-preferences/${params.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(preferences),
+        body: JSON.stringify({
+          venueType: preferences.venueType,
+          timeOfDay: preferences.timeOfDay,
+          locationPreference: preferences.locationPreference,
+        }),
       });
-      if (response.ok) {
-        setSavedPreferences(preferences);
-        alert('העדפות החתונה נשמרו בהצלחה!');
+      
+      if (!preferencesResponse.ok) {
+        throw new Error('Failed to update wedding preferences');
       }
+
+      const preferencesResult = await preferencesResponse.json();
+      console.log('Preferences update result:', preferencesResult);
+      
+      // עדכון המצב המקומי
+      setSavedPreferences(preferences);
+      
+      // טעינה מחדש של הנתונים מהשרת
+      await fetchProfileAndPreferences();
+      
+      alert('העדפות החתונה נשמרו בהצלחה!');
     } catch (error) {
       console.error('Failed to save preferences:', error);
-      alert('שגיאה בשמירת ההעדפות');
+      alert('שגיאה בשמירת ההעדפות: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -139,7 +205,7 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
 
     const venue = preferences.venueType ? venueTypes[preferences.venueType] : '';
     const time = preferences.timeOfDay ? times[preferences.timeOfDay] : '';
-    const location = preferences.location ? locations[preferences.location] : '';
+    const location = preferences.locationPreference ? locations[preferences.locationPreference] : '';
 
     if (!venue && !time && !location) {
       return 'טרם נבחרו העדפות';
@@ -208,8 +274,8 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
             <div style={styles.formGroup}>
               <label style={styles.label}>אזור בארץ</label>
               <select
-                name="location"
-                value={preferences.location}
+                name="locationPreference"
+                value={preferences.locationPreference}
                 onChange={handlePreferencesChange}
                 style={styles.select}
                 required

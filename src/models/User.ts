@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema({
     type: String,
     required: false,
   },
-  phoneNumber: {
+  phone: {
     type: String,
     required: false,
   },
@@ -46,12 +46,49 @@ const userSchema = new mongoose.Schema({
   },
   providerId: String,
   profilePicture: String,
-  weddingDate: Date,
-  partnerName: String,
-  partnerPhone: String,
-  expectedGuests: String,
-  weddingLocation: String,
-  budget: String,
+  
+  // Partner Details
+  partnerName: {
+    type: String,
+    required: false,
+  },
+  partnerEmail: {
+    type: String,
+    required: false,
+  },
+  partnerPhone: {
+    type: String,
+    required: false,
+  },
+  partnerIdNumber: {
+    type: String,
+    required: false,
+  },
+  partnerGender: {
+    type: String,
+    enum: ['Male', 'Female', 'Other'],
+    required: false,
+  },
+  
+  // Wedding Details
+  weddingDate: {
+    type: Date,
+    required: false,
+  },
+  expectedGuests: {
+    type: String,
+    required: false,
+  },
+  weddingLocation: {
+    type: String,
+    required: false,
+  },
+  budget: {
+    type: String,
+    required: false,
+  },
+  
+  // Wedding Preferences
   preferences: {
     venue: { type: Boolean, default: false },
     catering: { type: Boolean, default: false },
@@ -59,6 +96,24 @@ const userSchema = new mongoose.Schema({
     music: { type: Boolean, default: false },
     design: { type: Boolean, default: false }
   },
+  
+  // Additional Wedding Details
+  venueType: {
+    type: String,
+    enum: ['garden', 'nature', ''],
+    default: '',
+  },
+  timeOfDay: {
+    type: String,
+    enum: ['evening', 'afternoon', ''],
+    default: '',
+  },
+  locationPreference: {
+    type: String,
+    enum: ['south', 'center', 'north', ''],
+    default: '',
+  },
+  
   isProfileComplete: {
     type: Boolean,
     default: false

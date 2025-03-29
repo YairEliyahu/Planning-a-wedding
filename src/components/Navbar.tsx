@@ -34,6 +34,13 @@ const Navbar = () => {
           <Link href="/" style={styles.link}>
             דף הבית
           </Link>
+          <Link href="/suppliers" style={styles.link}>
+            ספקים
+          </Link>
+          
+          <Link href="/contact" style={styles.link}>
+            צור קשר
+          </Link>
           <Link href="/about" style={styles.link}>
             אודות
           </Link>
@@ -96,10 +103,15 @@ const styles = {
     alignItems: 'center',
   },
   logo: {
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: '1.8rem',
+    fontWeight: 'normal',
+    color: '#ff4081',
     textDecoration: 'none',
+    fontFamily: 'var(--font-pacifico), cursive',
+    transition: 'color 0.3s ease',
+    '&:hover': {
+      color: '#e91e63',
+    },
   },
   links: {
     display: 'flex',

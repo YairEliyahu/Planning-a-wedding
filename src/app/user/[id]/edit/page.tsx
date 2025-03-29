@@ -8,13 +8,15 @@ interface UserProfile {
   _id: string;
   fullName: string;
   email: string;
-  phoneNumber: string;
+  phone: string;
   weddingDate: string;
   partnerName: string;
   partnerPhone: string;
   expectedGuests: string;
-  weddingLocation: string;
   budget: string;
+  venueType: 'garden' | 'nature' | '';
+  timeOfDay: 'evening' | 'afternoon' | '';
+  locationPreference: 'south' | 'center' | 'north' | '';
   preferences: {
     venue: boolean;
     catering: boolean;
@@ -32,13 +34,15 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [formData, setFormData] = useState({
     fullName: '',
-    phoneNumber: '',
+    phone: '',
     weddingDate: '',
     partnerName: '',
     partnerPhone: '',
     expectedGuests: '',
-    weddingLocation: '',
     budget: '',
+    venueType: '',
+    timeOfDay: '',
+    locationPreference: '',
     preferences: {
       venue: false,
       catering: false,
@@ -100,13 +104,15 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
 
       setFormData({
         fullName: userData.fullName || '',
-        phoneNumber: userData.phoneNumber || '',
+        phone: userData.phone || '',
         weddingDate: formattedDate,
         partnerName: userData.partnerName || '',
         partnerPhone: userData.partnerPhone || '',
         expectedGuests: userData.expectedGuests || '',
-        weddingLocation: userData.weddingLocation || '',
         budget: userData.budget || '',
+        venueType: userData.venueType || '',
+        timeOfDay: userData.timeOfDay || '',
+        locationPreference: userData.locationPreference || '',
         preferences: {
           venue: Boolean(userData.preferences?.venue),
           catering: Boolean(userData.preferences?.catering),
@@ -123,7 +129,7 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -242,8 +248,8 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
                 <label style={styles.label}>טלפון</label>
                 <input
                   type="tel"
-                  name="phoneNumber"
-                  value={formData.phoneNumber}
+                  name="phone"
+                  value={formData.phone}
                   onChange={handleChange}
                   style={styles.input}
                   required
@@ -263,8 +269,51 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
 
             {/* Wedding Details Section */}
             <div style={styles.section}>
-              <h3 style={styles.sectionTitle}>פרטי החתונה</h3>
+              <h3 style={styles.sectionTitle}>פרטי האירוע</h3>
               
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>מיקום האירוע</label>
+                <select
+                  name="venueType"
+                  value={formData.venueType}
+                  onChange={handleChange}
+                  style={styles.input}
+                >
+                  <option value="">בחרו את סוג המקום</option>
+                  <option value="garden">גן אירועים</option>
+                  <option value="nature">אירוע בטבע</option>
+                </select>
+              </div>
+
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>שעת האירוע</label>
+                <select
+                  name="timeOfDay"
+                  value={formData.timeOfDay}
+                  onChange={handleChange}
+                  style={styles.input}
+                >
+                  <option value="">בחרו את שעת האירוע</option>
+                  <option value="evening">חתונת ערב</option>
+                  <option value="afternoon">חתונת צהריים</option>
+                </select>
+              </div>
+
+              <div style={styles.fieldContainer}>
+                <label style={styles.label}>אזור בארץ</label>
+                <select
+                  name="locationPreference"
+                  value={formData.locationPreference}
+                  onChange={handleChange}
+                  style={styles.input}
+                >
+                  <option value="">בחרו את האזור המועדף</option>
+                  <option value="south">דרום</option>
+                  <option value="center">מרכז</option>
+                  <option value="north">צפון</option>
+                </select>
+              </div>
+
               <div style={styles.fieldContainer}>
                 <label style={styles.label}>תאריך החתונה</label>
                 <input
@@ -304,17 +353,6 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
                   type="number"
                   name="expectedGuests"
                   value={formData.expectedGuests}
-                  onChange={handleChange}
-                  style={styles.input}
-                />
-              </div>
-
-              <div style={styles.fieldContainer}>
-                <label style={styles.label}>מיקום משוער</label>
-                <input
-                  type="text"
-                  name="weddingLocation"
-                  value={formData.weddingLocation}
                   onChange={handleChange}
                   style={styles.input}
                 />

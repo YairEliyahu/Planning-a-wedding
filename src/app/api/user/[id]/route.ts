@@ -75,7 +75,7 @@ export async function PATCH(
       params.id,
       { 
         $set: {
-          phoneNumber: processedData.phoneNumber,
+          phone: processedData.phone,
           weddingDate: processedData.weddingDate,
           partnerName: processedData.partnerName,
           partnerPhone: processedData.partnerPhone,

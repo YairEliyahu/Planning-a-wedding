@@ -4,6 +4,16 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@200..800&display=swap');
 
+/* שימוש במשתני פונט שהוגדרו בקובץ layout.tsx */
+/* הקלאסים האלה יכולים לשמש לשימוש בפונטים במקומות אחרים */
+.pacifico-font {
+  font-family: var(--font-pacifico), cursive;
+}
+
+.inter-font {
+  font-family: var(--font-inter), sans-serif;
+}
+
 * {
   font-family: 'Assistant', sans-serif;
 }
@@ -83,8 +93,6 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     --ring: 224.3 76.3% 48%;
   }
 }
-
-
 
 @layer base {
   * {

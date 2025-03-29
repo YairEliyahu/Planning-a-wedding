@@ -1,5 +1,32 @@
 import mongoose from 'mongoose';
 
+interface IGuestDocument extends mongoose.Document {
+  userId: mongoose.Types.ObjectId;
+  name: string;
+  phoneNumber?: string;
+  numberOfGuests: number;
+  side: 'חתן' | 'כלה' | 'משותף';
+  isConfirmed: boolean | null;
+  notes: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface IGuestModel extends mongoose.Model<IGuestDocument> {
+  getOrganizedGuestList(userId: string): Promise<{
+    userId: string;
+    total: number;
+    confirmed: number;
+    pending: number;
+    declined: number;
+    sides: {
+      'חתן': IGuestDocument[];
+      'כלה': IGuestDocument[];
+      'משותף': IGuestDocument[];
+    };
+  }>;
+}
+
 const guestSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -53,8 +80,48 @@ guestSchema.pre('save', function(next) {
   next();
 });
 
-// Add index for better query performance
-guestSchema.index({ userId: 1 });
+// Add compound index for better organization and query performance
+guestSchema.index({ userId: 1, side: 1, isConfirmed: 1 });
+
+// Virtual for total number of guests for this user
+guestSchema.virtual('totalGuests').get(function(this: IGuestDocument) {
+  return this.numberOfGuests || 1;
+});
+
+// Static method to get guests organized by user
+guestSchema.statics.getOrganizedGuestList = async function(userId: string) {
+  const guests = await this.find({ userId }).sort({ side: 1, isConfirmed: -1, name: 1 });
+  
+  const organizedGuests = {
+    userId,
+    total: 0,
+    confirmed: 0,
+    pending: 0,
+    declined: 0,
+    sides: {
+      'חתן': [] as IGuestDocument[],
+      'כלה': [] as IGuestDocument[],
+      'משותף': [] as IGuestDocument[]
+    }
+  };
+
+  guests.forEach((guest: IGuestDocument) => {
+    // Add to side-specific array
+    organizedGuests.sides[guest.side].push(guest);
+    
+    // Update counters
+    organizedGuests.total += guest.numberOfGuests;
+    if (guest.isConfirmed === true) {
+      organizedGuests.confirmed += guest.numberOfGuests;
+    } else if (guest.isConfirmed === false) {
+      organizedGuests.declined += guest.numberOfGuests;
+    } else {
+      organizedGuests.pending += guest.numberOfGuests;
+    }
+  });
+
+  return organizedGuests;
+};
 
 // Create model (or use existing model)
-export default mongoose.models.Guest || mongoose.model('Guest', guestSchema); 
+export default (mongoose.models.Guest as IGuestModel) || mongoose.model<IGuestDocument, IGuestModel>('Guest', guestSchema); 

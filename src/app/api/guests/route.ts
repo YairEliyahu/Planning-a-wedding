@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import dbConnect from '@/utils/dbConnect';
 import Guest from '@/models/Guest';
+import mongoose from 'mongoose';
 
 // GET /api/guests - Get all guests for the authenticated user
 export async function GET(req: NextRequest) {
@@ -18,10 +19,13 @@ export async function GET(req: NextRequest) {
     // Connect to the database
     await dbConnect();
 
-    // Fetch the guests for the user
-    const guests = await Guest.find({ userId });
+    // Fetch the organized guests for the user
+    const organizedGuests = await Guest.getOrganizedGuestList(userId);
 
-    return NextResponse.json({ guests });
+    return NextResponse.json({
+      success: true,
+      guests: organizedGuests
+    });
   } catch (error) {
     console.error('Error fetching guests:', error);
     return NextResponse.json(
@@ -48,9 +52,12 @@ export async function POST(req: NextRequest) {
     // Connect to the database
     await dbConnect();
 
+    // Convert userId string to ObjectId
+    const userObjectId = new mongoose.Types.ObjectId(userId);
+
     // Create a new guest
     const guest = await Guest.create({
-      userId,
+      userId: userObjectId,
       name,
       phoneNumber,
       numberOfGuests: numberOfGuests !== undefined && numberOfGuests !== null ? numberOfGuests : 1,
@@ -59,7 +66,14 @@ export async function POST(req: NextRequest) {
       notes: notes || ''
     });
 
-    return NextResponse.json({ guest }, { status: 201 });
+    // Fetch the updated organized list
+    const organizedGuests = await Guest.getOrganizedGuestList(userId);
+
+    return NextResponse.json({
+      success: true,
+      guest,
+      organizedGuests
+    }, { status: 201 });
   } catch (error) {
     console.error('Error creating guest:', error);
     return NextResponse.json(
