@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import LoadingSpinner from '../../../components/LoadingSpinner';
 
 interface UserProfile {
   _id: string;
@@ -181,16 +182,36 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
 
   if (!isAuthReady || isLoading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.loadingSpinner}>טוען...</div>
-      </div>
+      <LoadingSpinner 
+        text="טוען את פרטי המשתמש..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+        bgOpacity={0.9}
+      />
     );
   }
 
   if (error) {
     return (
-      <div style={styles.container}>
-        <div style={styles.errorMessage}>{error}</div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+          <h2 className="text-red-500 text-xl font-bold mb-4">שגיאה בטעינת הנתונים</h2>
+          <p className="text-gray-700 mb-6">{error}</p>
+          <div className="flex justify-center">
+            <button 
+              onClick={() => { 
+                setIsLoading(true);
+                setError('');
+                fetchUserProfile()
+                  .finally(() => setIsLoading(false));
+              }}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+            >
+              נסה שנית
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

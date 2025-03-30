@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const RegisterPage = () => {
   const [email, setEmail] = useState('');
@@ -25,8 +26,6 @@ const RegisterPage = () => {
       if (!email || !password || !fullName) {
         throw new Error('אנא מלא את כל שדות החובה: אימייל, סיסמה ושם מלא');
       }
-
-      console.log('Sending registration data...');
       
       const response = await fetch('/api/auth/signup', {
         method: 'POST',
@@ -46,13 +45,10 @@ const RegisterPage = () => {
       });
 
       const data = await response.json();
-      console.log('Registration response:', data);
 
       if (!response.ok) {
         throw new Error(data.message || 'Registration failed');
       }
-
-      console.log('Registration successful!');
       
       // שומרים את הטוקן
       if (data.token) {
@@ -69,9 +65,8 @@ const RegisterPage = () => {
         router.push('/complete-profile');
       }
 
-    } catch (error: any) {
-      console.error('Registration error:', error);
-      setError(error.message || 'אירעה שגיאה בתהליך ההרשמה');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'אירעה שגיאה בתהליך ההרשמה');
     } finally {
       setIsLoading(false);
     }
@@ -152,6 +147,8 @@ const RegisterPage = () => {
           {isLoading ? 'מבצע רישום...' : 'הרשמה'}
         </button>
       </form>
+      
+      {isLoading && <LoadingSpinner text="מבצע רישום..." />}
     </div>
   );
 };

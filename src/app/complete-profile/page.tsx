@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 interface User {
   _id: string;
@@ -142,7 +143,6 @@ export default function CompleteProfile() {
         const data = await response.json();
         
         if (data.user) {
-          console.log('Loaded user data:', data.user); // Debug log
           setFormData(prev => ({
             ...prev,
             fullName: data.user.fullName || '',
@@ -174,7 +174,7 @@ export default function CompleteProfile() {
           }));
         }
       } catch (error) {
-        console.error('Error loading user data:', error);
+        setError('שגיאה בטעינת נתוני המשתמש');
       } finally {
         setIsInitializing(false);
       }
@@ -198,34 +198,37 @@ export default function CompleteProfile() {
       const formattedData = {
         ...formData,
         weddingDate: formData.weddingDate ? new Date(formData.weddingDate).toISOString() : undefined,
-        expectedGuests: formData.expectedGuests.toString(),
-        budget: formData.budget.toString(),
-        isProfileComplete: true
+        // הפיכת מספרים משרשרת לnumber
+        expectedGuests: formData.expectedGuests ? Number(formData.expectedGuests) : undefined,
+        budget: formData.budget ? Number(formData.budget) : undefined,
       };
 
       const response = await fetch(`/api/user/${user?._id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formattedData),
+        body: JSON.stringify({
+          ...formattedData,
+          isProfileComplete: true
+        }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error('Failed to update profile');
+        throw new Error(data.message || 'Failed to update profile');
       }
 
-      const data = await response.json();
-      
-      if (data.success && data.token && data.user) {
-        await login(data.token, data.user);
-        router.push('/');
-      } else {
-        throw new Error('Invalid response data');
+      // לאחר שהפרופיל עודכן בהצלחה
+      // נעדכן את מידע המשתמש במערכת
+      if (data.user) {
+        await login(localStorage.getItem('token') || '', data.user);
+        router.push(`/user/${user?._id}`);
       }
-    } catch (err) {
-      setError('Failed to update profile. Please try again.');
-      console.error('Error updating profile:', err);
+
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'שגיאה בעדכון פרופיל');
     } finally {
       setIsLoading(false);
     }
@@ -262,13 +265,303 @@ export default function CompleteProfile() {
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
-  if (isInitializing) {
+  if (isInitializing || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <LoadingSpinner 
+        text="טוען..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+      />
     );
   }
+
+  const renderStep = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div>
+            <h2 className="text-2xl font-semibold mb-4">פרטים אישיים</h2>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="fullName">שם מלא *</Label>
+                <Input 
+                  id="fullName" 
+                  name="fullName" 
+                  value={formData.fullName} 
+                  onChange={handleChange} 
+                  required 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="email">אימייל *</Label>
+                <Input 
+                  id="email" 
+                  name="email" 
+                  type="email" 
+                  value={formData.email} 
+                  onChange={handleChange} 
+                  disabled
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="age">גיל</Label>
+                <Input 
+                  id="age" 
+                  name="age" 
+                  type="number" 
+                  value={formData.age} 
+                  onChange={handleChange} 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="gender">מגדר</Label>
+                <select 
+                  id="gender" 
+                  name="gender" 
+                  value={formData.gender} 
+                  onChange={handleChange} 
+                  className="w-full p-2 border rounded"
+                >
+                  <option value="">בחר/י מגדר</option>
+                  <option value="Male">זכר</option>
+                  <option value="Female">נקבה</option>
+                  <option value="Other">אחר</option>
+                </select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="location">מיקום</Label>
+                <Input 
+                  id="location" 
+                  name="location" 
+                  value={formData.location} 
+                  onChange={handleChange} 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="phone">מספר טלפון</Label>
+                <Input 
+                  id="phone" 
+                  name="phone" 
+                  type="tel" 
+                  value={formData.phone} 
+                  onChange={handleChange} 
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="idNumber">תעודת זהות</Label>
+                <Input 
+                  id="idNumber" 
+                  name="idNumber" 
+                  value={formData.idNumber} 
+                  onChange={handleChange} 
+                />
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 2:
+        return (
+          <div>
+            <h2 className="text-2xl font-semibold mb-4">פרטי בן/ת הזוג</h2>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="partnerName">שם בן/בת הזוג</Label>
+                <Input
+                  id="partnerName"
+                  name="partnerName"
+                  value={formData.partnerName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="partnerEmail">אימייל</Label>
+                <Input
+                  id="partnerEmail"
+                  name="partnerEmail"
+                  type="email"
+                  value={formData.partnerEmail}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="partnerPhone">טלפון</Label>
+                <Input
+                  id="partnerPhone"
+                  name="partnerPhone"
+                  type="tel"
+                  value={formData.partnerPhone}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="partnerIdNumber">תעודת זהות</Label>
+                <Input
+                  id="partnerIdNumber"
+                  name="partnerIdNumber"
+                  value={formData.partnerIdNumber}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="partnerGender">מגדר</Label>
+                <select
+                  id="partnerGender"
+                  name="partnerGender"
+                  value={formData.partnerGender}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                  required
+                >
+                  <option value="">בחר מגדר</option>
+                  <option value="Male">זכר</option>
+                  <option value="Female">נקבה</option>
+                  <option value="Other">אחר</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        );
+        
+      case 3:
+        return (
+          <div>
+            <h2 className="text-2xl font-semibold mb-4">פרטי החתונה</h2>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="weddingDate">תאריך חתונה</Label>
+                <Input
+                  id="weddingDate"
+                  name="weddingDate"
+                  type="date"
+                  value={formData.weddingDate}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="expectedGuests">מספר אורחים משוער</Label>
+                <Input
+                  id="expectedGuests"
+                  name="expectedGuests"
+                  type="number"
+                  placeholder="הכנס מספר אורחים משוער"
+                  value={formData.expectedGuests}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="weddingLocation">מיקום החתונה</Label>
+                <Input
+                  id="weddingLocation"
+                  name="weddingLocation"
+                  type="text"
+                  placeholder="הכנס מיקום משוער"
+                  value={formData.weddingLocation}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="budget">תקציב משוער</Label>
+                <Input
+                  id="budget"
+                  name="budget"
+                  type="text"
+                  placeholder="הכנס תקציב משוער"
+                  value={formData.budget}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="venueType">סוג המקום</Label>
+                <select
+                  id="venueType"
+                  name="venueType"
+                  value={formData.venueType}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                  required
+                >
+                  <option value="">בחר את סוג המקום</option>
+                  <option value="garden">גן אירועים</option>
+                  <option value="nature">אירוע בטבע</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="timeOfDay">שעת האירוע</Label>
+                <select
+                  id="timeOfDay"
+                  name="timeOfDay"
+                  value={formData.timeOfDay}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                  required
+                >
+                  <option value="">בחר את שעת האירוע</option>
+                  <option value="evening">חתונת ערב</option>
+                  <option value="afternoon">חתונת צהריים</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="locationPreference">אזור בארץ</Label>
+                <select
+                  id="locationPreference"
+                  name="locationPreference"
+                  value={formData.locationPreference}
+                  onChange={handleChange}
+                  className="w-full p-2 border rounded"
+                  required
+                >
+                  <option value="">בחר את האזור המועדף</option>
+                  <option value="south">דרום</option>
+                  <option value="center">מרכז</option>
+                  <option value="north">צפון</option>
+                </select>
+              </div>
+              <div className="space-y-4">
+                <Label>במה תרצו שנעזור לכם?</Label>
+                <div className="space-y-2">
+                  {Object.entries(formData.preferences).map(([key, value]) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <Checkbox
+                        id={key}
+                        name={`preferences.${key}`}
+                        checked={value}
+                        onCheckedChange={(checked) => 
+                          handleChange({
+                            target: { name: `preferences.${key}`, checked }
+                          } as React.ChangeEvent<HTMLInputElement>)
+                      />
+                      <Label htmlFor={key} className="mr-2">
+                        {key === 'venue' && 'אולם אירועים'}
+                        {key === 'catering' && 'קייטרינג'}
+                        {key === 'photography' && 'צילום'}
+                        {key === 'music' && 'מוזיקה'}
+                        {key === 'design' && 'עיצוב'}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+    }
+  };
 
   return (
     <div dir="rtl">
@@ -315,305 +608,7 @@ export default function CompleteProfile() {
             </div>
             <div className="space-y-6">
               <form onSubmit={handleSubmit} className="space-y-4">
-                {currentStep === 1 && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="fullName">שם מלא</Label>
-                      <div className="relative">
-                        <Input
-                          id="fullName"
-                          name="fullName"
-                          value={formData.fullName}
-                          onChange={handleChange}
-                          className="text-right"
-                          required
-                        />
-                        {user?.fullName && formData.fullName !== user.fullName && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            שם מקורי מגוגל: {user.fullName}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email">אימייל</Label>
-                      <Input
-                        id="email"
-                        name="email"
-                        value={formData.email}
-                        disabled
-                        className="text-right bg-gray-50"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        כתובת האימייל מסונכרנת עם חשבון הגוגל שלך
-                      </p>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="age">גיל</Label>
-                      <Input
-                        id="age"
-                        name="age"
-                        type="number"
-                        value={formData.age}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="gender">מגדר</Label>
-                      <select
-                        id="gender"
-                        name="gender"
-                        value={formData.gender}
-                        onChange={handleChange}
-                        className="w-full p-2 border rounded-md text-right"
-                        required
-                      >
-                        <option value="">בחר מגדר</option>
-                        <option value="Male">זכר</option>
-                        <option value="Female">נקבה</option>
-                        <option value="Other">אחר</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="location">מיקום</Label>
-                      <Input
-                        id="location"
-                        name="location"
-                        value={formData.location}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="phone">מספר טלפון</Label>
-                      <div className="relative">
-                        <Input
-                          id="phone"
-                          name="phone"
-                          type="tel"
-                          value={formData.phone}
-                          onChange={handleChange}
-                          className="text-right"
-                          required
-                        />
-                        {user?.phone && formData.phone !== user.phone && (
-                          <p className="text-xs text-muted-foreground mt-1">
-                            מספר טלפון מקורי: {user.phone}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="idNumber">תעודת זהות</Label>
-                      <Input
-                        id="idNumber"
-                        name="idNumber"
-                        value={formData.idNumber}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {currentStep === 2 && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerName">שם בן/בת הזוג</Label>
-                      <Input
-                        id="partnerName"
-                        name="partnerName"
-                        value={formData.partnerName}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerEmail">אימייל</Label>
-                      <Input
-                        id="partnerEmail"
-                        name="partnerEmail"
-                        type="email"
-                        value={formData.partnerEmail}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerPhone">טלפון</Label>
-                      <Input
-                        id="partnerPhone"
-                        name="partnerPhone"
-                        type="tel"
-                        value={formData.partnerPhone}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerIdNumber">תעודת זהות</Label>
-                      <Input
-                        id="partnerIdNumber"
-                        name="partnerIdNumber"
-                        value={formData.partnerIdNumber}
-                        onChange={handleChange}
-                        className="text-right"
-                        required
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="partnerGender">מגדר</Label>
-                      <select
-                        id="partnerGender"
-                        name="partnerGender"
-                        value={formData.partnerGender}
-                        onChange={handleChange}
-                        className="w-full p-2 border rounded-md text-right"
-                        required
-                      >
-                        <option value="">בחר מגדר</option>
-                        <option value="Male">זכר</option>
-                        <option value="Female">נקבה</option>
-                        <option value="Other">אחר</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {currentStep === 3 && (
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="weddingDate">תאריך חתונה</Label>
-                      <Input
-                        id="weddingDate"
-                        name="weddingDate"
-                        type="date"
-                        value={formData.weddingDate}
-                        onChange={handleChange}
-                        required
-                        className="text-right"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="expectedGuests">מספר אורחים משוער</Label>
-                      <Input
-                        id="expectedGuests"
-                        name="expectedGuests"
-                        type="number"
-                        placeholder="הכנס מספר אורחים משוער"
-                        value={formData.expectedGuests}
-                        onChange={handleChange}
-                        required
-                        className="text-right"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="weddingLocation">מיקום החתונה</Label>
-                      <Input
-                        id="weddingLocation"
-                        name="weddingLocation"
-                        type="text"
-                        placeholder="הכנס מיקום משוער"
-                        value={formData.weddingLocation}
-                        onChange={handleChange}
-                        required
-                        className="text-right"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="budget">תקציב משוער</Label>
-                      <Input
-                        id="budget"
-                        name="budget"
-                        type="text"
-                        placeholder="הכנס תקציב משוער"
-                        value={formData.budget}
-                        onChange={handleChange}
-                        required
-                        className="text-right"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="venueType">סוג המקום</Label>
-                      <select
-                        id="venueType"
-                        name="venueType"
-                        value={formData.venueType}
-                        onChange={handleChange}
-                        className="w-full p-2 border rounded-md text-right"
-                        required
-                      >
-                        <option value="">בחר את סוג המקום</option>
-                        <option value="garden">גן אירועים</option>
-                        <option value="nature">אירוע בטבע</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="timeOfDay">שעת האירוע</Label>
-                      <select
-                        id="timeOfDay"
-                        name="timeOfDay"
-                        value={formData.timeOfDay}
-                        onChange={handleChange}
-                        className="w-full p-2 border rounded-md text-right"
-                        required
-                      >
-                        <option value="">בחר את שעת האירוע</option>
-                        <option value="evening">חתונת ערב</option>
-                        <option value="afternoon">חתונת צהריים</option>
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="locationPreference">אזור בארץ</Label>
-                      <select
-                        id="locationPreference"
-                        name="locationPreference"
-                        value={formData.locationPreference}
-                        onChange={handleChange}
-                        className="w-full p-2 border rounded-md text-right"
-                        required
-                      >
-                        <option value="">בחר את האזור המועדף</option>
-                        <option value="south">דרום</option>
-                        <option value="center">מרכז</option>
-                        <option value="north">צפון</option>
-                      </select>
-                    </div>
-                    <div className="space-y-4">
-                      <Label>במה תרצו שנעזור לכם?</Label>
-                      <div className="space-y-2">
-                        {Object.entries(formData.preferences).map(([key, value]) => (
-                          <div key={key} className="flex items-center gap-2">
-                            <Checkbox
-                              id={key}
-                              name={`preferences.${key}`}
-                              checked={value}
-                              onCheckedChange={(checked) => 
-                                handleChange({
-                                  target: { name: `preferences.${key}`, checked }
-                                } as React.ChangeEvent<HTMLInputElement>)
-                              }
-                            />
-                            <Label htmlFor={key} className="mr-2">
-                              {key === 'venue' && 'אולם אירועים'}
-                              {key === 'catering' && 'קייטרינג'}
-                              {key === 'photography' && 'צילום'}
-                              {key === 'music' && 'מוזיקה'}
-                              {key === 'design' && 'עיצוב'}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {renderStep()}
 
                 <div className="flex justify-between pt-6 border-t mt-6">
                   {currentStep > 1 && (

@@ -4,10 +4,14 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Scale, CoreScaleOptions } from 'chart.js';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
+import LoadingSpinner from '../../components/LoadingSpinner';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
+
+// קאש לנתונים - מונע בקשות חוזרות
+const dataCache = new Map();
 
 interface UserProfile {
   _id: string;
@@ -99,156 +103,209 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     categories: []
   });
 
+  // פונקציה שמחזירה נתונים מהקאש או מבצעת בקשה חדשה
+  const fetchWithCache = async (url: string, cacheKey: string) => {
+    if (dataCache.has(cacheKey)) {
+      return dataCache.get(cacheKey);
+    }
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (response.ok) {
+      dataCache.set(cacheKey, data);
+    }
+    
+    return data;
+  };
+
   useEffect(() => {
+    // להמנע מבדיקות מיותרות אם הנתונים כבר נטענו
+    if (profile && !isLoading) return;
+
     const checkAuth = async () => {
       if (!isAuthReady) {
-        console.log('Auth not ready yet');
         return;
       }
 
-      console.log('Auth state:', { isAuthReady, user: user?._id });
-
       if (!user) {
-        console.log('No user found, redirecting to login');
         router.push('/login');
         return;
       }
 
       if (user._id !== params.id) {
-        console.log('User ID mismatch:', { userId: user._id, paramsId: params.id });
         router.push(`/user/${user._id}`);
         return;
       }
 
-      await Promise.all([
-        fetchUserProfile(),
-        fetchWeddingPreferences(),
-        fetchChecklistData()
-      ]);
+      await loadUserData();
     };
 
     checkAuth();
-  }, [isAuthReady, user, params.id, router]);
+  }, [isAuthReady, user, params.id, router, isLoading, profile]);
 
-  const fetchChecklistData = async () => {
+  // פונקציה המאגדת את כל בקשות הנתונים
+  const loadUserData = async () => {
+    setIsLoading(true);
     try {
-      const response = await fetch(`/api/wedding-checklist/${params.id}`);
-      const data = await response.json();
-      if (response.ok && data.checklist) {
-        // חישוב סך כל ההוצאות מהצ'ק ליסט
-        const totalExpenses = data.checklist.reduce((total: number, category: ChecklistCategory) => {
-          return total + category.items.reduce((sum: number, item: ChecklistItem) => {
-            return sum + (Number(item.budget) || 0);
-          }, 0);
-        }, 0);
+      // בקשות מקבילות עם Promise.all
+      const [profileData, checklistData] = await Promise.all([
+        fetchUserProfile(),
+        fetchChecklistData(),
+        fetchWeddingPreferences()
+      ]);
 
-        // חישוב ההכנסות הצפויות מהאורחים
-        const venueItem = data.checklist[0]?.items[0];
-        const guestCount = venueItem?.guestCount || 0;
-        const averageGift = venueItem?.averageGift || 0;
-        const expectedIncome = guestCount * averageGift;
-
-        // עדכון הניתוח התקציבי
-        setBudgetAnalysis({
-          expectedIncome,
-          estimatedExpenses: totalExpenses,
-          categories: data.checklist.map((category: ChecklistCategory) => ({
-            name: category.name,
-            amount: category.items.reduce((sum: number, item: ChecklistItem) => sum + (Number(item.budget) || 0), 0)
-          }))
-        });
-
-        // עדכון נתוני הארנק
-        setWalletInfo({
-          totalBudget: expectedIncome,
-          spentBudget: totalExpenses,
-          remainingBudget: expectedIncome - totalExpenses,
-          lastTransactions: data.checklist.flatMap((category: ChecklistCategory) => 
-            category.items
-              .filter((item: ChecklistItem) => item.budget && Number(item.budget) > 0)
-              .map((item: ChecklistItem) => ({
-                itemName: item.name,
-                amount: Number(item.budget),
-                date: new Date().toISOString()
-              }))
-          ).sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5)
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch checklist data:', error);
-    }
-  };
-
-  const fetchWeddingPreferences = async () => {
-    try {
-      const response = await fetch(`/api/wedding-preferences/${params.id}`);
-      const data = await response.json();
-      if (response.ok && data.preferences) {
-        // עשאיר את הפונקציה הזו ריקה כי אנחנו מקבלים את הנתונים מהצ'ק ליסט
-      }
-    } catch (error) {
-      console.error('Failed to fetch wedding preferences:', error);
-    }
-  };
-
-  const fetchUserProfile = async () => {
-    try {
-      setIsLoading(true);
-      const response = await fetch(`/api/user/${params.id}`);
-      const data = await response.json();
-      
-      if (!response.ok) throw new Error(data.message);
-      
-      if (!data.user.isProfileComplete) {
+      if (!profileData?.user?.isProfileComplete) {
         router.push('/complete-profile');
         return;
       }
 
-      setProfile(data.user);
-      setError('');
-
-      // חישוב הזמן שנותר עד החתונה
-      if (data.user.weddingDate) {
-        const calculateTimeLeft = () => {
-          const weddingTime = new Date(data.user.weddingDate).getTime();
-          const now = new Date().getTime();
-          const difference = weddingTime - now;
-
-          if (difference > 0) {
-            setTimeLeft({
-              days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-              hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-              minutes: Math.floor((difference / 1000 / 60) % 60),
-              seconds: Math.floor((difference / 1000) % 60)
-            });
-          }
-        };
-
-        calculateTimeLeft();
-        const timer = setInterval(calculateTimeLeft, 1000);
-        return () => clearInterval(timer);
-      }
-
+      setProfile(profileData.user);
+      processChecklistData(checklistData);
     } catch (err) {
-      setError('Failed to load profile');
-      console.error(err);
+      setError('אירעה שגיאה בטעינת הנתונים');
     } finally {
       setIsLoading(false);
     }
   };
 
+  const fetchChecklistData = async () => {
+    try {
+      const cacheKey = `checklist-${params.id}`;
+      const data = await fetchWithCache(`/api/wedding-checklist/${params.id}`, cacheKey);
+      return data;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const processChecklistData = (data: { checklist?: ChecklistCategory[] }) => {
+    if (!data?.checklist) return;
+
+    // חישוב סך כל ההוצאות מהצ'ק ליסט
+    const totalExpenses = data.checklist.reduce((total: number, category: ChecklistCategory) => {
+      return total + category.items.reduce((sum: number, item: ChecklistItem) => {
+        return sum + (Number(item.budget) || 0);
+      }, 0);
+    }, 0);
+
+    // חישוב ההכנסות הצפויות מהאורחים
+    const venueItem = data.checklist[0]?.items[0];
+    const guestCount = venueItem?.guestCount || 0;
+    const averageGift = venueItem?.averageGift || 0;
+    const expectedIncome = guestCount * averageGift;
+
+    // עדכון הניתוח התקציבי
+    setBudgetAnalysis({
+      expectedIncome,
+      estimatedExpenses: totalExpenses,
+      categories: data.checklist.map((category: ChecklistCategory) => ({
+        name: category.name,
+        amount: category.items.reduce((sum: number, item: ChecklistItem) => sum + (Number(item.budget) || 0), 0)
+      }))
+    });
+
+    // עדכון נתוני הארנק
+    setWalletInfo({
+      totalBudget: expectedIncome,
+      spentBudget: totalExpenses,
+      remainingBudget: expectedIncome - totalExpenses,
+      lastTransactions: data.checklist.flatMap((category: ChecklistCategory) => 
+        category.items
+          .filter((item: ChecklistItem) => item.budget && Number(item.budget) > 0)
+          .map((item: ChecklistItem) => ({
+            itemName: item.name,
+            amount: Number(item.budget),
+            date: new Date().toISOString()
+          }))
+      ).sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5)
+    });
+  };
+
+  const fetchWeddingPreferences = async () => {
+    try {
+      const cacheKey = `preferences-${params.id}`;
+      return await fetchWithCache(`/api/wedding-preferences/${params.id}`, cacheKey);
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const fetchUserProfile = async () => {
+    try {
+      const cacheKey = `user-${params.id}`;
+      const data = await fetchWithCache(`/api/user/${params.id}`, cacheKey);
+      
+      if (!data.user) {
+        throw new Error('לא נמצא משתמש');
+      }
+
+      // חישוב הזמן שנותר עד החתונה
+      if (data.user.weddingDate) {
+        startWeddingCountdown(data.user.weddingDate);
+      }
+
+      return data;
+    } catch (err) {
+      setError('Failed to load profile');
+      return null;
+    }
+  };
+
+  const startWeddingCountdown = (weddingDate: string) => {
+    const calculateTimeLeft = () => {
+      const weddingTime = new Date(weddingDate).getTime();
+      const now = new Date().getTime();
+      const difference = weddingTime - now;
+
+      if (difference > 0) {
+        setTimeLeft({
+          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
+          minutes: Math.floor((difference / 1000 / 60) % 60),
+          seconds: Math.floor((difference / 1000) % 60)
+        });
+      }
+    };
+
+    calculateTimeLeft();
+    const timer = setInterval(calculateTimeLeft, 1000);
+    return () => clearInterval(timer);
+  };
+
+  // רכיב טעינה שמשתמש בLoadingSpinner
   if (!isAuthReady || isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl text-gray-600">טוען...</div>
-      </div>
+      <LoadingSpinner 
+        text="טוען את פרופיל המשתמש..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+        bgOpacity={0.9}
+      />
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-500">{error}</div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+          <h2 className="text-red-500 text-xl font-bold mb-4">שגיאה בטעינת הנתונים</h2>
+          <p className="text-gray-700 mb-6">{error}</p>
+          <div className="flex justify-center">
+            <button 
+              onClick={() => { 
+                setIsLoading(true);
+                setError('');
+                Promise.all([loadUserData(), fetchWeddingPreferences()])
+                  .finally(() => setIsLoading(false));
+              }}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+            >
+              נסה שנית
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -256,414 +313,194 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   if (!profile) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-gray-500">הפרופיל לא נמצא</div>
+        <div className="text-xl text-gray-600">לא נמצא פרופיל</div>
       </div>
     );
   }
 
-  const chartData = {
-    labels: ['הכנסות צפויות', 'הוצאות משוערות'],
-    datasets: [
-      {
-        label: 'סכום בש"ח',
-        data: [budgetAnalysis.expectedIncome, budgetAnalysis.estimatedExpenses],
-        backgroundColor: [
-          'rgba(75, 192, 192, 0.6)',
-          budgetAnalysis.expectedIncome >= budgetAnalysis.estimatedExpenses 
-            ? 'rgba(255, 99, 132, 0.6)' 
-            : 'rgba(255, 0, 0, 0.6)'
-        ],
-        borderColor: [
-          'rgb(75, 192, 192)',
-          budgetAnalysis.expectedIncome >= budgetAnalysis.estimatedExpenses 
-            ? 'rgb(255, 99, 132)' 
-            : 'rgb(255, 0, 0)'
-        ],
-        borderWidth: 1,
-      },
-    ],
-  };
-
-  const chartOptions = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        rtl: true,
-        labels: {
-          font: {
-            family: 'Heebo, sans-serif'
-          }
-        }
-      },
-    },
-    scales: {
-      y: {
-        type: 'linear' as const,
-        beginAtZero: true,
-        ticks: {
-          callback: function(this: Scale<CoreScaleOptions>, tickValue: number | string) {
-            const value = typeof tickValue === 'string' ? parseFloat(tickValue) : tickValue;
-            return `₪${value.toLocaleString()}`;
-          }
-        }
-      }
-    }
-  };
-
   return (
-    <>
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-20">
-        <div className="max-w-4xl mx-auto p-6">
-          {/* כרטיס ספירה לאחור */}
-          <div style={styles.welcomeCard}>
-            <h1 className="text-5xl font-bold text-purple-800 text-center mb-12 font-mplus drop-shadow-sm">
-              היי {profile.fullName} ו{profile.partnerName}
-            </h1>
-            <p style={styles.subtitle}>היום הגדול מתקרב ובא!</p>
-            
-            <div style={styles.countdownContainer}>
-              <div style={styles.countdownItem}>
-                <span style={styles.number}>{timeLeft.seconds}</span>
-                <span style={styles.label}>שניות</span>
-              </div>
-              <div style={styles.countdownItem}>
-                <span style={styles.number}>{timeLeft.minutes}</span>
-                <span style={styles.label}>דקות</span>
-              </div>
-              <div style={styles.countdownItem}>
-                <span style={styles.number}>{timeLeft.hours}</span>
-                <span style={styles.label}>שעות</span>
-              </div>
-              <div style={styles.countdownItem}>
-                <span style={styles.number}>{timeLeft.days}</span>
-                <span style={styles.label}>ימים</span>
-              </div>
+      
+      <main className="container mx-auto px-4 py-8">
+        {/* כרטיס ספירה לאחור */}
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6 text-center">
+          <h1 className="text-3xl font-bold text-purple-800 mb-4">
+            היי {profile.fullName} ו{profile.partnerName}
+          </h1>
+          <p className="text-xl mb-4">היום הגדול מתקרב!</p>
+          
+          <div className="flex justify-center gap-6 mb-4">
+            <div className="text-center">
+              <span className="block text-4xl font-bold">{timeLeft.days}</span>
+              <span className="text-sm">ימים</span>
             </div>
-
-            <p style={styles.weddingDate}>
-              תאריך החתונה: {new Date(profile.weddingDate).toLocaleDateString('he-IL')}
-            </p>
+            <div className="text-center">
+              <span className="block text-4xl font-bold">{timeLeft.hours}</span>
+              <span className="text-sm">שעות</span>
+            </div>
+            <div className="text-center">
+              <span className="block text-4xl font-bold">{timeLeft.minutes}</span>
+              <span className="text-sm">דקות</span>
+            </div>
+            <div className="text-center">
+              <span className="block text-4xl font-bold">{timeLeft.seconds}</span>
+              <span className="text-sm">שניות</span>
+            </div>
           </div>
+          
+          <p className="text-gray-600">
+            תאריך החתונה: {new Date(profile.weddingDate).toLocaleDateString('he-IL')}
+          </p>
+        </div>
 
-          {/* כרטיס ארנק */}
-          <div style={styles.walletCard}>
-            <h2 style={styles.walletTitle}>הארנק שלי</h2>
-            
-            <div style={styles.budgetOverview}>
-              <div style={styles.budgetItem}>
-                <span style={styles.budgetLabel}>תקציב כולל</span>
-                <span style={styles.budgetAmount}>₪{walletInfo.totalBudget.toLocaleString()}</span>
-              </div>
-              
-              <div style={styles.budgetItem}>
-                <span style={styles.budgetLabel}>הוצאות</span>
-                <span style={styles.spentAmount}>₪{walletInfo.spentBudget.toLocaleString()}</span>
-              </div>
-              
-              <div style={styles.budgetItem}>
-                <span style={styles.budgetLabel}>נותר</span>
-                <span style={styles.remainingAmount}>₪{walletInfo.remainingBudget.toLocaleString()}</span>
-              </div>
-            </div>
-
-            <div style={styles.progressBarContainer}>
-              <div 
-                style={{
-                  ...styles.progressBar,
-                  width: `${(walletInfo.spentBudget / walletInfo.totalBudget) * 100}%`
+        {/* Grid עם קטעים של ניתוח תקציב והארנק */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          {/* ניתוח תקציב */}
+          {budgetAnalysis.categories.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-4 lg:col-span-2">
+              <h3 className="text-xl font-semibold mb-4">ניתוח תקציב</h3>
+              <Bar
+                data={{
+                  labels: budgetAnalysis.categories.map(cat => cat.name),
+                  datasets: [{
+                    label: 'הוצאות לפי קטגוריה',
+                    data: budgetAnalysis.categories.map(cat => cat.amount),
+                    backgroundColor: 'rgba(245, 158, 11, 0.5)',
+                    borderColor: 'rgba(245, 158, 11, 1)',
+                    borderWidth: 1
+                  }]
+                }}
+                options={{
+                  responsive: true,
+                  plugins: {
+                    legend: {
+                      position: 'top' as const,
+                    },
+                    title: {
+                      display: true,
+                      text: 'התפלגות הוצאות לפי קטגוריה'
+                    }
+                  }
                 }}
               />
             </div>
-
-            {/* גרף הכנסות והוצאות */}
-            <div style={styles.chartContainer}>
-              <h3 style={styles.chartTitle}>ניתוח תקציב</h3>
-              <div style={styles.chart}>
-                <Bar data={chartData} options={chartOptions} />
+          )}
+          
+          {/* הארנק */}
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="text-xl font-semibold mb-4">הארנק שלי</h3>
+            
+            <div className="grid grid-cols-1 gap-4 mb-4">
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">תקציב כולל</p>
+                <p className="text-xl font-bold">₪{walletInfo.totalBudget.toLocaleString()}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">הוצאות</p>
+                <p className="text-xl font-bold text-red-500">₪{walletInfo.spentBudget.toLocaleString()}</p>
+              </div>
+              <div className="p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">נותר</p>
+                <p className="text-xl font-bold text-green-500">₪{walletInfo.remainingBudget.toLocaleString()}</p>
               </div>
             </div>
-
-            {/* פירוט הוצאות לפי קטגוריות */}
-            <div style={styles.categoriesContainer}>
-              <h3 style={styles.categoriesTitle}>חלוקת תקציב משוערת</h3>
-              <div style={styles.categoriesGrid}>
-                {budgetAnalysis.categories.map((category, index) => (
-                  <div key={index} style={styles.categoryItem}>
-                    <span style={styles.categoryName}>{category.name}</span>
-                    <span style={styles.categoryAmount}>₪{category.amount.toLocaleString()}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div style={styles.transactionsContainer}>
-              <h3 style={styles.transactionsTitle}>הוצאות אחרונות</h3>
-              {walletInfo.lastTransactions.length > 0 ? (
-                walletInfo.lastTransactions.map((transaction, index) => (
-                  <div key={index} style={styles.transaction}>
-                    <span style={styles.transactionName}>{transaction.itemName}</span>
-                    <span style={styles.transactionAmount}>₪{transaction.amount.toLocaleString()}</span>
-                    <span style={styles.transactionDate}>
-                      {new Date(transaction.date).toLocaleDateString('he-IL')}
-                    </span>
-                  </div>
-                ))
-              ) : (
-                <p style={{ textAlign: 'center', color: '#666' }}>אין הוצאות אחרונות</p>
-              )}
-            </div>
-          </div>
-
-          {/* כרטיס פרטי פרופיל */}
-          <div className="bg-white rounded-xl shadow-lg p-8 mt-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">פרטים אישיים</h3>
-                  <div className="space-y-3">
-                    <p><span className="font-medium">שם מלא:</span> {profile.fullName}</p>
-                    <p><span className="font-medium">אימייל:</span> {profile.email}</p>
-                    <p><span className="font-medium">טלפון:</span> {profile.phoneNumber}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">פרטי בן/בת הזוג</h3>
-                  <div className="space-y-3">
-                    <p><span className="font-medium">שם:</span> {profile.partnerName}</p>
-                    <p><span className="font-medium">טלפון:</span> {profile.partnerPhone}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">פרטי החתונה</h3>
-                  <div className="space-y-3">
-                    <p><span className="font-medium">תאריך:</span> {new Date(profile.weddingDate).toLocaleDateString('he-IL')}</p>
-                    <p><span className="font-medium">מיקום:</span> {profile.weddingLocation}</p>
-                    <p><span className="font-medium">מספר אורחים:</span> {profile.expectedGuests}</p>
-                    <p><span className="font-medium">תקציב:</span> ₪{parseInt(profile.budget).toLocaleString()}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">שירותים נדרשים</h3>
-                  <div className="space-y-2">
-                    {profile.preferences.venue && <p>✓ אולם אירועים</p>}
-                    {profile.preferences.catering && <p>✓ קייטרינג</p>}
-                    {profile.preferences.photography && <p>✓ צילום</p>}
-                    {profile.preferences.music && <p>✓ מוזיקה</p>}
-                    {profile.preferences.design && <p>✓ עיצוב</p>}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-8 flex justify-center gap-4">
-              <button
-                onClick={() => router.push(`/user/${profile._id}/edit`)}
-                className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                ערוך פרופיל
-              </button>
-              {profile.authProvider === 'google' && (
-                <button
-                  onClick={() => router.push(`/user/${profile._id}/set-password`)}
-                  className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500"
-                >
-                  הגדר סיסמה
-                </button>
-              )}
+            
+            <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+              <div 
+                className="bg-blue-600 h-2.5 rounded-full transition-all duration-500"
+                style={{ width: `${Math.min((walletInfo.spentBudget / walletInfo.totalBudget) * 100, 100)}%` }}
+              ></div>
             </div>
           </div>
         </div>
-      </div>
-    </>
+        
+        {/* הוצאות אחרונות */}
+        <div className="bg-white rounded-lg shadow-md p-4 mb-6">
+          <h3 className="text-xl font-semibold mb-4">הוצאות אחרונות</h3>
+          {walletInfo.lastTransactions.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="py-2 px-4 text-right">שם הפריט</th>
+                    <th className="py-2 px-4 text-right">סכום</th>
+                    <th className="py-2 px-4 text-right">תאריך</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {walletInfo.lastTransactions.map((transaction, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50 transition-colors">
+                      <td className="py-2 px-4">{transaction.itemName}</td>
+                      <td className="py-2 px-4 font-medium">₪{transaction.amount.toLocaleString()}</td>
+                      <td className="py-2 px-4 text-gray-600">{new Date(transaction.date).toLocaleDateString('he-IL')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-center text-gray-500 py-4">אין הוצאות אחרונות</p>
+          )}
+        </div>
+        
+        {/* פרטי הפרופיל */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-xl font-semibold mb-4">פרטי פרופיל</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-lg font-medium mb-2">פרטים אישיים</h4>
+              <div className="space-y-2">
+                <p><span className="font-medium">שם מלא:</span> {profile.fullName}</p>
+                <p><span className="font-medium">אימייל:</span> {profile.email}</p>
+                <p><span className="font-medium">טלפון:</span> {profile.phoneNumber}</p>
+              </div>
+              
+              <h4 className="text-lg font-medium mt-4 mb-2">פרטי בן/בת הזוג</h4>
+              <div className="space-y-2">
+                <p><span className="font-medium">שם:</span> {profile.partnerName}</p>
+                <p><span className="font-medium">טלפון:</span> {profile.partnerPhone}</p>
+              </div>
+            </div>
+            
+            <div>
+              <h4 className="text-lg font-medium mb-2">פרטי החתונה</h4>
+              <div className="space-y-2">
+                <p><span className="font-medium">תאריך:</span> {new Date(profile.weddingDate).toLocaleDateString('he-IL')}</p>
+                <p><span className="font-medium">מיקום:</span> {profile.weddingLocation}</p>
+                <p><span className="font-medium">מספר אורחים:</span> {profile.expectedGuests}</p>
+                <p><span className="font-medium">תקציב:</span> ₪{parseInt(profile.budget).toLocaleString()}</p>
+              </div>
+              
+              <h4 className="text-lg font-medium mt-4 mb-2">שירותים נדרשים</h4>
+              <div className="space-y-1">
+                {profile.preferences.venue && <p className="text-green-600">✓ אולם אירועים</p>}
+                {profile.preferences.catering && <p className="text-green-600">✓ קייטרינג</p>}
+                {profile.preferences.photography && <p className="text-green-600">✓ צילום</p>}
+                {profile.preferences.music && <p className="text-green-600">✓ מוזיקה</p>}
+                {profile.preferences.design && <p className="text-green-600">✓ עיצוב</p>}
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-6 flex justify-center gap-4">
+            <button
+              onClick={() => router.push(`/user/${profile._id}/edit`)}
+              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              ערוך פרופיל
+            </button>
+            {profile.authProvider === 'google' && (
+              <button
+                onClick={() => router.push(`/user/${profile._id}/set-password`)}
+                className="bg-green-600 text-white px-6 py-2 rounded-md hover:bg-green-700 transition-colors focus:outline-none focus:ring-2 focus:ring-green-500"
+              >
+                הגדר סיסמה
+              </button>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
-
-const styles = {
-  welcomeCard: {
-    backgroundColor: '#fff',
-    padding: '2rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    textAlign: 'center' as const,
-  },
-  title: {
-    fontSize: '2rem',
-    color: '#333',
-    marginBottom: '1rem',
-  },
-  subtitle: {
-    fontSize: '1.2rem',
-    color: '#666',
-    marginBottom: '2rem',
-  },
-  countdownContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '2rem',
-    margin: '2rem 0',
-  },
-  countdownItem: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-  },
-  number: {
-    fontSize: '3rem',
-    fontWeight: 'bold',
-    color: '#0070f3',
-  },
-  label: {
-    fontSize: '1.1rem',
-    color: '#333',
-    fontWeight: '500',
-  },
-  weddingDate: {
-    fontSize: '1.1rem',
-    color: '#333',
-    marginTop: '2rem',
-  },
-  walletCard: {
-    backgroundColor: '#fff',
-    borderRadius: '12px',
-    padding: '2rem',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    marginTop: '2rem',
-  },
-  walletTitle: {
-    fontSize: '1.8rem',
-    color: '#333',
-    marginBottom: '1.5rem',
-    textAlign: 'center' as const,
-  },
-  budgetOverview: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    marginBottom: '2rem',
-  },
-  budgetItem: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    alignItems: 'center',
-    flex: 1,
-  },
-  budgetLabel: {
-    fontSize: '1rem',
-    color: '#666',
-    marginBottom: '0.5rem',
-  },
-  budgetAmount: {
-    fontSize: '1.5rem',
-    color: '#0070f3',
-    fontWeight: 'bold',
-  },
-  spentAmount: {
-    fontSize: '1.5rem',
-    color: '#ff4444',
-    fontWeight: 'bold',
-  },
-  remainingAmount: {
-    fontSize: '1.5rem',
-    color: '#00c853',
-    fontWeight: 'bold',
-  },
-  progressBarContainer: {
-    width: '100%',
-    height: '10px',
-    backgroundColor: '#f0f0f0',
-    borderRadius: '5px',
-    overflow: 'hidden',
-    marginBottom: '2rem',
-  },
-  progressBar: {
-    height: '100%',
-    backgroundColor: '#0070f3',
-    transition: 'width 0.3s ease',
-  },
-  transactionsContainer: {
-    marginTop: '1.5rem',
-  },
-  transactionsTitle: {
-    fontSize: '1.2rem',
-    color: '#333',
-    marginBottom: '1rem',
-  },
-  transaction: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '0.75rem 0',
-    borderBottom: '1px solid #eee',
-  },
-  transactionName: {
-    flex: 1,
-    fontSize: '1rem',
-    color: '#333',
-  },
-  transactionAmount: {
-    fontSize: '1rem',
-    color: '#ff4444',
-    marginRight: '1rem',
-    minWidth: '100px',
-    textAlign: 'right' as const,
-  },
-  transactionDate: {
-    fontSize: '0.9rem',
-    color: '#666',
-    minWidth: '100px',
-    textAlign: 'right' as const,
-  },
-  chartContainer: {
-    marginTop: '2rem',
-    padding: '1rem',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '8px',
-  },
-  chartTitle: {
-    fontSize: '1.4rem',
-    color: '#333',
-    marginBottom: '1rem',
-    textAlign: 'center' as const,
-  },
-  chart: {
-    maxHeight: '300px',
-  },
-  categoriesContainer: {
-    marginTop: '2rem',
-    padding: '1rem',
-  },
-  categoriesTitle: {
-    fontSize: '1.2rem',
-    color: '#333',
-    marginBottom: '1rem',
-    textAlign: 'center' as const,
-  },
-  categoriesGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '1rem',
-  },
-  categoryItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '0.75rem',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '6px',
-  },
-  categoryName: {
-    fontSize: '1rem',
-    color: '#333',
-  },
-  categoryAmount: {
-    fontSize: '1rem',
-    color: '#0070f3',
-    fontWeight: 'bold',
-  },
-};

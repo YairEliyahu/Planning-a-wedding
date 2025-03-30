@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import Navbar from '@/components/Navbar';
 import Head from 'next/head';
 import * as XLSX from 'xlsx';
+import LoadingSpinner from '../../../components/LoadingSpinner';
 
 interface Guest {
   _id: string;
@@ -45,10 +46,14 @@ interface UserProfile {
 
 type NewGuest = Omit<Guest, '_id' | 'createdAt' | 'updatedAt'>;
 
+// קאש לנתונים - מונע בקשות חוזרות
+const dataCache = new Map();
+
 export default function GuestlistPage({ params }: { params: { id: string } }) {
   const { user, isAuthReady } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const [guests, setGuests] = useState<Guest[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [newGuest, setNewGuest] = useState<NewGuest>({
@@ -79,9 +84,36 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const [importProgress, setImportProgress] = useState<{ current: number, total: number, currentName: string }>({ current: 0, total: 0, currentName: '' });
   const [importOverlay, setImportOverlay] = useState(false);
 
-  useEffect(() => {
-    setIsLoading(true);
+  // פונקציה שמחזירה נתונים מהקאש או מבצעת בקשה חדשה
+  const fetchWithCache = async (url: string, cacheKey: string) => {
+    if (dataCache.has(cacheKey)) {
+      console.log(`Using cached data for ${cacheKey}`);
+      return dataCache.get(cacheKey);
+    }
     
+    console.log(`Fetching fresh data for ${cacheKey}`);
+    const response = await fetch(url, {
+      headers: {
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+      console.error(`API error for ${url}:`, errorData);
+      throw new Error(errorData.message || `Failed to fetch ${url}`);
+    }
+    
+    const data = await response.json();
+    
+    // רק מאחסן בקאש אם התקבלו נתונים תקינים
+    dataCache.set(cacheKey, data);
+    
+    return data;
+  };
+
+  useEffect(() => {
     const checkAuth = async () => {
       if (!isAuthReady) {
         return;
@@ -97,11 +129,20 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         return;
       }
 
-      await Promise.all([
-        fetchGuestlist(),
-        fetchUserProfile()
-      ]);
-      setIsLoading(false);
+      setIsLoading(true);
+      setError('');
+
+      try {
+        await Promise.all([
+          fetchGuestlist(),
+          fetchUserProfile()
+        ]);
+      } catch (err: Error | unknown) {
+        console.error('Error loading data:', err);
+        setError(err instanceof Error ? err.message : 'אירעה שגיאה בטעינת הנתונים');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     checkAuth();
@@ -111,10 +152,8 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   useEffect(() => {
     const cleanupExampleGuests = async () => {
       if (guests.length > 0) {
-        console.log('בודק ומנקה אורחי דוגמה...');
         const updatedGuests = await removeExampleGuests([...guests]);
         if (updatedGuests.length !== guests.length) {
-          console.log(`נמחקו ${guests.length - updatedGuests.length} אורחי דוגמה`);
           setGuests(updatedGuests);
         }
       }
@@ -125,10 +164,8 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
   const fetchUserProfile = async () => {
     try {
-      const response = await fetch(`/api/user/${params.id}`);
-      const data = await response.json();
-      
-      if (!response.ok) throw new Error(data.message);
+      const cacheKey = `user-${params.id}`;
+      const data = await fetchWithCache(`/api/user/${params.id}`, cacheKey);
       
       if (!data.user.isProfileComplete) {
         router.push('/complete-profile');
@@ -137,34 +174,49 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
       setProfile(data.user);
     } catch (err) {
-      console.error('Failed to load profile:', err);
+      setError('שגיאה בטעינת פרופיל המשתמש');
+      throw err;
     }
   };
 
   const fetchGuestlist = async () => {
     try {
-      // Call the API to fetch guests for this user
-      const response = await fetch(`/api/guests?userId=${params.id}`);
-      const data = await response.json();
+      const cacheKey = `guests-${params.id}`;
+      console.log(`Attempting to fetch guestlist with cacheKey: ${cacheKey}`);
+      const data = await fetchWithCache(`/api/guests?userId=${params.id}`, cacheKey);
+      console.log('Raw API response:', data);
       
-      if (!response.ok) {
-        throw new Error(data.message || 'Failed to fetch guest list');
+      // בדיקה שהתשובה מכילה מערך אורחים
+      if (!data || !data.guests) {
+        console.error('Invalid API response:', data);
+        setGuests([]);
+        return;
       }
       
       // קבלת האורחים מהתשובה
-      const fetchedGuests = data.guests || [];
+      const fetchedGuests = Array.isArray(data.guests) ? data.guests : [];
+      console.log('Fetched guests:', fetchedGuests.length);
       
       // הסרת אורחי דוגמה אם קיימים
       const cleanedGuests = await removeExampleGuests(fetchedGuests);
       
       setGuests(cleanedGuests);
     } catch (error) {
-      console.error('Failed to fetch guestlist:', error);
+      console.error('Error in fetchGuestlist:', error);
+      setError('שגיאה בטעינת רשימת האורחים');
+      setGuests([]);
+      throw error;
     }
   };
   
   // פונקציה למחיקת אורחי דוגמה אוטומטית
-  const removeExampleGuests = async (guestList: Guest[]) => {
+  const removeExampleGuests = async (guestList: Guest[] | unknown) => {
+    // וידוא שהנתונים הם אכן מערך 
+    if (!Array.isArray(guestList)) {
+      console.error('guestList is not an array:', guestList);
+      return [];
+    }
+    
     // שמות של אורחי דוגמה מוכרים
     const exampleNames = ['ישראל ישראלי', 'שרה לוי', 'משפחת כהן'];
     const exampleKeywords = ['דוגמא', 'דוגמה', 'Example', 'מיכל לוי', 'Israeli', 'Israel', 'template'];
@@ -1071,17 +1123,40 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     }
   };
 
+  // יצירת רכיב טעינה
   if (!isAuthReady || isLoading) {
     return (
-      <>
-        <Head>
-          <link href="https://fonts.googleapis.com/css2?family=M+PLUS+1p:wght@400;500;700&display=swap" rel="stylesheet" />
-        </Head>
-        <Navbar />
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
-          <div className="text-xl text-gray-600">טוען...</div>
+      <LoadingSpinner 
+        text="טוען את רשימת האורחים..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+        bgOpacity={0.9}
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+        <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
+          <h2 className="text-red-500 text-xl font-bold mb-4">שגיאה בטעינת הנתונים</h2>
+          <p className="text-gray-700 mb-6">{error}</p>
+          <div className="flex justify-center">
+            <button 
+              onClick={() => { 
+                setIsLoading(true);
+                setError('');
+                Promise.all([fetchGuestlist(), fetchUserProfile()])
+                  .finally(() => setIsLoading(false));
+              }}
+              className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
+            >
+              נסה שנית
+            </button>
+          </div>
+        </div>
       </div>
-      </>
     );
   }
 

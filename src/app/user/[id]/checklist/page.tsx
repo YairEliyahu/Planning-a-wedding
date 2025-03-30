@@ -6,8 +6,12 @@ import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, TooltipItem } from 'chart.js';
 import { Pie } from 'react-chartjs-2';
+import LoadingSpinner from '../../../components/LoadingSpinner';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
+
+// קאש לנתונים - מונע בקשות חוזרות
+const dataCache = new Map();
 
 interface ChecklistItem {
   id: string;
@@ -113,11 +117,28 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [isAddingItem, setIsAddingItem] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState<'all' | 'completed' | 'pending'>('all');
   const [sortBy, setSortBy] = useState<'priority' | 'name' | 'budget'>('priority');
   const [expectedIncome, setExpectedIncome] = useState<number>(0);
   const [venueTotalCost, setVenueTotalCost] = useState<number>(0);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+
+  // פונקציה שמחזירה נתונים מהקאש או מבצעת בקשה חדשה
+  const fetchWithCache = async (url: string, cacheKey: string) => {
+    if (dataCache.has(cacheKey)) {
+      return dataCache.get(cacheKey);
+    }
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (response.ok) {
+      dataCache.set(cacheKey, data);
+    }
+    
+    return data;
+  };
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -133,8 +154,13 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
         return;
       }
 
-      await fetchChecklist();
-      setIsLoading(false);
+      try {
+        await fetchChecklist();
+      } catch (err) {
+        setError('אירעה שגיאה בטעינת הנתונים');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     checkAuth();
@@ -148,9 +174,10 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
 
   const fetchChecklist = async () => {
     try {
-      const response = await fetch(`/api/wedding-checklist/${params.id}`);
-      const data = await response.json();
-      if (response.ok && data.checklist) {
+      const cacheKey = `checklist-${params.id}`;
+      const data = await fetchWithCache(`/api/wedding-checklist/${params.id}`, cacheKey);
+      
+      if (data.checklist) {
         setCategories(data.checklist);
         const venueItem = data.checklist[0]?.items[0];
         if (venueItem) {
@@ -170,6 +197,7 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
       setCategories(defaultCategories);
       setExpectedIncome(0);
       setVenueTotalCost(0);
+      throw error;
     }
   };
 
@@ -464,14 +492,26 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
     };
   };
 
+  // Show loading spinner while loading
   if (!isAuthReady || isLoading) {
     return (
-      <>
-        <Navbar />
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
-          <div className="text-xl text-gray-600">טוען...</div>
+      <LoadingSpinner 
+        text="טוען את הצ'קליסט..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+      />
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-xl text-red-600">
+          {error} <button className="underline ml-2" onClick={() => { setIsLoading(true); fetchChecklist().finally(() => setIsLoading(false)); }}>נסה שוב</button>
         </div>
-      </>
+      </div>
     );
   }
 

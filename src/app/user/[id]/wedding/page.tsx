@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
+import LoadingSpinner from '../../../components/LoadingSpinner';
 
 interface UserProfile {
   _id: string;
@@ -35,6 +36,9 @@ interface WeddingPreferences {
   estimatedBudget: string;
 }
 
+// קאש לנתונים - מונע בקשות חוזרות
+const dataCache = new Map();
+
 export default function MyWeddingPage({ params }: { params: { id: string } }) {
   const { user, isAuthReady } = useAuth();
   const router = useRouter();
@@ -48,6 +52,23 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [savedPreferences, setSavedPreferences] = useState<WeddingPreferences | null>(null);
+  const [error, setError] = useState('');
+
+  // פונקציה שמחזירה נתונים מהקאש או מבצעת בקשה חדשה
+  const fetchWithCache = async (url: string, cacheKey: string) => {
+    if (dataCache.has(cacheKey)) {
+      return dataCache.get(cacheKey);
+    }
+    
+    const response = await fetch(url);
+    const data = await response.json();
+    
+    if (response.ok) {
+      dataCache.set(cacheKey, data);
+    }
+    
+    return data;
+  };
 
   const fetchProfileAndPreferences = async () => {
     try {
@@ -64,17 +85,17 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
       setProfile(profileData.user);
       
       // קריאה להעדפות החתונה
-      const preferencesResponse = await fetch(`/api/wedding-preferences/${params.id}`);
-      const preferencesData = await preferencesResponse.json();
+      const cacheKey = `wedding-preferences-${params.id}`;
+      const data = await fetchWithCache(`/api/wedding-preferences/${params.id}`, cacheKey);
       
-      console.log('Wedding preferences data:', preferencesData);
+      console.log('Wedding preferences data:', data);
       
       // שילוב המידע מהפרופיל ומהעדפות החתונה
       const newPreferences = {
         // העדפות חתונה מהטבלה הנפרדת
-        venueType: preferencesData?.preferences?.venueType || profileData.user.venueType || '',
-        timeOfDay: preferencesData?.preferences?.timeOfDay || profileData.user.timeOfDay || '',
-        locationPreference: preferencesData?.preferences?.locationPreference || profileData.user.locationPreference || '',
+        venueType: data?.preferences?.venueType || profileData.user.venueType || '',
+        timeOfDay: data?.preferences?.timeOfDay || profileData.user.timeOfDay || '',
+        locationPreference: data?.preferences?.locationPreference || profileData.user.locationPreference || '',
         // נתונים מפרופיל המשתמש
         guestsCount: profileData.user.expectedGuests || '',
         estimatedBudget: profileData.user.budget || '',
@@ -87,6 +108,7 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
       
     } catch (error) {
       console.error('Failed to fetch data:', error);
+      setError('אירעה שגיאה בטעינת העדפות החתונה');
     } finally {
       setIsLoading(false);
     }
@@ -129,6 +151,8 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
+    
     try {
       console.log('Submitting preferences:', preferences);
       
@@ -180,18 +204,32 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
       alert('העדפות החתונה נשמרו בהצלחה!');
     } catch (error) {
       console.error('Failed to save preferences:', error);
-      alert('שגיאה בשמירת ההעדפות: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setError('שגיאה בשמירת העדפות החתונה');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  if (!user || isLoading) return (
-    <>
-      <Navbar />
+  if (!isAuthReady || isLoading) {
+    return (
+      <LoadingSpinner 
+        text="טוען את הגדרות החתונה..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+      />
+    );
+  }
+
+  if (error) {
+    return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl text-gray-600">טוען...</div>
+        <div className="text-xl text-red-600">
+          {error} <button className="underline ml-2" onClick={() => { setIsLoading(true); fetchProfileAndPreferences().finally(() => setIsLoading(false)); }}>נסה שוב</button>
+        </div>
       </div>
-    </>
-  );
+    );
+  }
 
   const getWeddingTitle = () => {
     if (!profile) return '';
@@ -215,245 +253,122 @@ export default function MyWeddingPage({ params }: { params: { id: string } }) {
   };
 
   return (
-    <>
+    <div className="min-h-screen bg-gray-50">
       <Navbar />
-      <div style={styles.container}>
-        <h1 style={styles.title}>{getWeddingTitle()}</h1>
-        
-        {savedPreferences && (
-          <div style={styles.preferencesOverview}>
-            <h2 style={styles.overviewTitle}>סיכום העדפות החתונה שלכם:</h2>
-            <div style={styles.preferencesCard}>
-              <p style={styles.preferencesText}>{getPreferenceText(savedPreferences)}</p>
-              <p style={styles.preferencesDetails}>
-                מספר אורחים משוער: {savedPreferences.guestsCount}
-              </p>
-              <p style={styles.preferencesDetails}>
-                תקציב משוער: ₪{Number(savedPreferences.estimatedBudget).toLocaleString()}
-              </p>
-            </div>
-          </div>
-        )}
-
-        <div style={styles.content}>
-          <p style={styles.welcomeText}>
-            בשביל להפיק את חתונת החלומות שלכם, בואו נבין מה הייתם רוצים שיהיה לכם בחתונה ואיך היא תראה
-          </p>
+      
+      <main className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <h1 className="text-3xl font-bold text-center mb-8">{getWeddingTitle()}</h1>
           
-          <form onSubmit={handleSubmit} style={styles.form}>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>מיקום האירוע</label>
-              <select
-                name="venueType"
-                value={preferences.venueType}
-                onChange={handlePreferencesChange}
-                style={styles.select}
-                required
-              >
-                <option value="">בחרו את סוג המקום</option>
-                <option value="garden">גן אירועים</option>
-                <option value="nature">אירוע בטבע</option>
-              </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>שעת האירוע</label>
-              <select
-                name="timeOfDay"
-                value={preferences.timeOfDay}
-                onChange={handlePreferencesChange}
-                style={styles.select}
-                required
-              >
-                <option value="">בחרו את שעת האירוע</option>
-                <option value="evening">חתונת ערב</option>
-                <option value="afternoon">חתונת צהריים</option>
-              </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>אזור בארץ</label>
-              <select
-                name="locationPreference"
-                value={preferences.locationPreference}
-                onChange={handlePreferencesChange}
-                style={styles.select}
-                required
-              >
-                <option value="">בחרו את האזור המועדף</option>
-                <option value="south">דרום</option>
-                <option value="center">מרכז</option>
-                <option value="north">צפון</option>
-              </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>כמות מוזמנים משוערת</label>
-              <input
-                type="number"
-                name="guestsCount"
-                value={preferences.guestsCount}
-                onChange={handlePreferencesChange}
-                style={styles.input}
-                placeholder="הכניסו מספר משוער של אורחים"
-                required
-                min="0"
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>תקציב משוער לחתונה</label>
-              <div style={styles.budgetInputWrapper}>
-                <input
-                  type="number"
-                  name="estimatedBudget"
-                  value={preferences.estimatedBudget}
-                  onChange={handlePreferencesChange}
-                  style={styles.input}
-                  placeholder="הכניסו תקציב משוער"
-                  required
-                  min="0"
-                  step="1000"
-                />
-                <span style={styles.currencySymbol}>₪</span>
+          {savedPreferences && (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+              <h2 className="text-xl font-bold mb-4">סיכום העדפות החתונה שלכם:</h2>
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1">
+                  <p className="text-base font-medium text-gray-900">{getPreferenceText(savedPreferences)}</p>
+                  <p className="text-sm text-gray-500">מספר אורחים משוער: {savedPreferences.guestsCount}</p>
+                  <p className="text-sm text-gray-500">תקציב משוער: ₪{Number(savedPreferences.estimatedBudget).toLocaleString()}</p>
+                </div>
               </div>
-              <p style={styles.helperText}>
-                *התקציב צריך לכלול: אולם, קייטרינג, צלם, תקליטן, שמלה, חליפה, טבעות, ושאר הספקים
-              </p>
             </div>
+          )}
 
-            <button type="submit" style={styles.submitButton}>
-              שמור העדפות
-            </button>
-          </form>
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-xl font-bold mb-6">העדפות חתונה</h2>
+            
+            <form onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <label className="block text-gray-700 mb-2">מיקום האירוע</label>
+                  <select
+                    name="venueType"
+                    value={preferences.venueType}
+                    onChange={handlePreferencesChange}
+                    className="w-full p-2 border rounded"
+                    required
+                  >
+                    <option value="">בחרו את סוג המקום</option>
+                    <option value="garden">גן אירועים</option>
+                    <option value="nature">אירוע בטבע</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 mb-2">שעת האירוע</label>
+                  <select
+                    name="timeOfDay"
+                    value={preferences.timeOfDay}
+                    onChange={handlePreferencesChange}
+                    className="w-full p-2 border rounded"
+                    required
+                  >
+                    <option value="">בחרו את שעת האירוע</option>
+                    <option value="evening">חתונת ערב</option>
+                    <option value="afternoon">חתונת צהריים</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 mb-2">אזור בארץ</label>
+                  <select
+                    name="locationPreference"
+                    value={preferences.locationPreference}
+                    onChange={handlePreferencesChange}
+                    className="w-full p-2 border rounded"
+                    required
+                  >
+                    <option value="">בחרו את האזור המועדף</option>
+                    <option value="south">דרום</option>
+                    <option value="center">מרכז</option>
+                    <option value="north">צפון</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 mb-2">כמות מוזמנים משוערת</label>
+                  <input
+                    type="number"
+                    name="guestsCount"
+                    value={preferences.guestsCount}
+                    onChange={handlePreferencesChange}
+                    className="w-full p-2 border rounded"
+                    placeholder="הכניסו מספר משוער של אורחים"
+                    required
+                    min="0"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-700 mb-2">תקציב משוער לחתונה</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      name="estimatedBudget"
+                      value={preferences.estimatedBudget}
+                      onChange={handlePreferencesChange}
+                      className="w-full p-2 border rounded"
+                      placeholder="הכניסו תקציב משוער"
+                      required
+                      min="0"
+                      step="1000"
+                    />
+                    <span className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500">₪</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-center">
+                <button
+                  type="submit"
+                  className="bg-blue-600 text-white px-8 py-3 rounded-md hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {isLoading ? 'שומר העדפות...' : 'שמירת העדפות'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
-      </div>
-    </>
+      </main>
+    </div>
   );
-}
-
-const styles = {
-  container: {
-    maxWidth: '1200px',
-    margin: '20px auto',
-    padding: '2rem',
-  },
-  title: {
-    fontSize: '2.5rem',
-    color: '#333',
-    marginBottom: '2rem',
-    textAlign: 'center' as const,
-    fontWeight: 'bold',
-  },
-  content: {
-    backgroundColor: '#fff',
-    padding: '2rem',
-    borderRadius: '12px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  },
-  welcomeText: {
-    fontSize: '1.2rem',
-    color: '#666',
-    textAlign: 'center' as const,
-    marginBottom: '2rem',
-    lineHeight: '1.6',
-  },
-  planningSection: {
-    marginTop: '2rem',
-  },
-  form: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '1.5rem',
-    maxWidth: '600px',
-    margin: '0 auto',
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '0.5rem',
-  },
-  label: {
-    fontSize: '1.1rem',
-    color: '#333',
-    fontWeight: '500',
-  },
-  select: {
-    padding: '0.75rem',
-    borderRadius: '8px',
-    border: '1px solid #ddd',
-    fontSize: '1rem',
-    backgroundColor: '#fff',
-    cursor: 'pointer',
-  },
-  input: {
-    padding: '0.75rem',
-    paddingRight: '30px',
-    borderRadius: '8px',
-    border: '1px solid #ddd',
-    fontSize: '1rem',
-    width: '100%',
-  },
-  submitButton: {
-    backgroundColor: '#0070f3',
-    color: '#fff',
-    padding: '1rem',
-    borderRadius: '8px',
-    border: 'none',
-    fontSize: '1.1rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    transition: 'background-color 0.3s ease',
-    marginTop: '1rem',
-  },
-  budgetInputWrapper: {
-    position: 'relative' as const,
-    display: 'flex',
-    alignItems: 'center',
-  },
-  currencySymbol: {
-    position: 'absolute' as const,
-    right: '10px',
-    top: '50%',
-    transform: 'translateY(-50%)',
-    color: '#666',
-    fontSize: '1rem',
-  },
-  helperText: {
-    fontSize: '0.9rem',
-    color: '#666',
-    marginTop: '0.5rem',
-    fontStyle: 'italic',
-  },
-  preferencesOverview: {
-    marginBottom: '2rem',
-    padding: '1rem',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '8px',
-  },
-  overviewTitle: {
-    fontSize: '1.5rem',
-    color: '#333',
-    marginBottom: '1rem',
-    textAlign: 'center' as const,
-  },
-  preferencesCard: {
-    backgroundColor: '#fff',
-    padding: '1.5rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
-  },
-  preferencesText: {
-    fontSize: '1.2rem',
-    color: '#0070f3',
-    textAlign: 'center' as const,
-    marginBottom: '1rem',
-    fontWeight: 'bold',
-  },
-  preferencesDetails: {
-    fontSize: '1.1rem',
-    color: '#666',
-    textAlign: 'center' as const,
-    marginTop: '0.5rem',
-  },
-}; 
+} 
