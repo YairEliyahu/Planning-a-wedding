@@ -281,10 +281,9 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     try {
       const guestToAdd = {
         ...newGuest,
-        userId: params.id // Add user ID to associate with this guest
+        userId: params.id
       };
       
-      // Call the API to add the guest
       const response = await fetch('/api/guests', {
         method: 'POST',
         headers: {
@@ -301,6 +300,10 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       
       // Add the new guest to the state
       setGuests([...guests, data.guest]);
+      
+      // ניקוי המטמון כדי לגרום לטעינה מחדש בפעם הבאה
+      const cacheKey = `guests-${params.id}`;
+      dataCache.delete(cacheKey);
       
       // Reset the form
       setNewGuest({

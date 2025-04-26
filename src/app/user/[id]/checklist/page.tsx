@@ -337,13 +337,17 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
 
   const saveChecklist = async (updatedCategories: Category[]) => {
     try {
-      await fetch(`/api/wedding-checklist/${params.id}`, {
+      const response = await fetch(`/api/wedding-checklist/${params.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ categories: updatedCategories }),
       });
+      if (response.ok) {
+        const cacheKey = `checklist-${params.id}`;
+        dataCache.set(cacheKey, { checklist: updatedCategories });
+      }
     } catch (error) {
       console.error('Failed to save checklist:', error);
     }
