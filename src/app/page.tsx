@@ -424,14 +424,14 @@ export default function HomePage() {
   // אנימציה לסרגל התמונות
   const sliderVariants = {
     animate: {
-      x: ['0%', '-80%'], // אנימציה מבוססת אחוזים במקום פיקסלים
+      x: ['0%', '-50%'],
       transition: {
         x: {
           repeat: Infinity,
           repeatType: 'loop' as const,
-          duration: 25, // זמן קצר יותר לאנימציה חלקה
+          duration: 30,
           ease: 'linear',
-          repeatDelay: 0 // אין השהייה בין חזרות
+          repeatDelay: 0
         }
       }
     }
@@ -678,9 +678,10 @@ export default function HomePage() {
               animate="animate"
               variants={sliderVariants}
             >
-              {(shuffledImages.length > 0 ? shuffledImages : backgroundImages).map((image, index) => (
+              {/* הצגה ראשונה של התמונות */}
+              {shuffledImages.map((image, index) => (
                 <motion.div 
-                  key={index} 
+                  key={`first-${index}`} 
                   style={{ 
                     width: '19.8%',
                     height: '100%',
@@ -714,6 +715,49 @@ export default function HomePage() {
                       width={1920}
                       height={1080}
                       priority={index === 0}
+                      style={styles.backgroundImage}
+                    />
+                  </div>
+                </motion.div>
+              ))}
+              
+              {/* הצגה שנייה זהה של התמונות להמשכיות חלקה */}
+              {shuffledImages.map((image, index) => (
+                <motion.div 
+                  key={`second-${index}`} 
+                  style={{ 
+                    width: '19.8%',
+                    height: '100%',
+                    padding: 0,
+                    margin: '0 1px',
+                    backgroundColor: '#fbf7f3',
+                    borderRadius: 4,
+                    boxShadow: 'none',
+                    overflow: 'hidden',
+                  }} 
+                  initial={{ opacity: 0.9 }}
+                  animate={{ 
+                    opacity: 1,
+                    transition: { duration: 1.5 }
+                  }}
+                >
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: 'rgba(251, 247, 243, 0.1)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    overflow: 'hidden',
+                    padding: 0,
+                    margin: 0,
+                  }}>
+                    <Image
+                      src={image}
+                      alt={`Wedding background ${index + 1}`}
+                      width={1920}
+                      height={1080}
+                      priority={false}
                       style={styles.backgroundImage}
                     />
                   </div>
