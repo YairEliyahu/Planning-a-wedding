@@ -12,72 +12,81 @@ interface DecodedToken {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    
-    // פרסור הבקשה בצורה בטוחה
-    let body;
-    try {
-      body = await request.json();
-    } catch (err) {
-      console.error('Error parsing request JSON:', err);
-      return NextResponse.json(
-        { message: 'Invalid JSON in request' },
-        { status: 400 }
-      );
-    }
-
-    const { token } = body;
+    const { token } = await request.json();
 
     if (!token) {
+      console.log('Token is missing');
       return NextResponse.json(
         { message: 'Token is required' },
         { status: 400 }
       );
     }
 
-    // אימות הטוקן
+    // Verify the token
     let decoded: DecodedToken;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as DecodedToken;
+      console.log('Decoded token:', decoded);
     } catch (error) {
-      console.error('Token verification failed:', error);
+      console.log('Token verification failed:', error);
       return NextResponse.json(
         { message: 'Invalid or expired token' },
         { status: 400 }
       );
     }
 
-    // וידוא שזה טוקן הזמנה
+    // Ensure this is an invitation token
     if (decoded.purpose !== 'partner-invite') {
+      console.log('Invalid token purpose:', decoded.purpose);
       return NextResponse.json(
         { message: 'Invalid token type' },
         { status: 400 }
       );
     }
 
-    // מציאת המשתמש המזמין
+    // Find the inviter
     const inviter = await User.findById(decoded.inviterId);
     if (!inviter) {
+      console.log('Inviter not found for ID:', decoded.inviterId);
       return NextResponse.json(
         { message: 'Inviter not found' },
         { status: 404 }
       );
     }
 
-    // בדיקה אם המשתמש המוזמן כבר קיים במערכת
-    const existingPartner = await User.findOne({ email: decoded.partnerEmail });
-    
-    // החזרת מידע מתאים
+    // Check if the invitation is still pending
+    console.log('Invitation status:', {
+      inviterId: inviter._id,
+      pending: inviter.partnerInvitePending,
+      accepted: inviter.partnerInviteAccepted,
+      partnerEmail: inviter.partnerEmail
+    });
+
+    // Allow validation even if already accepted
+    if (!inviter.partnerInvitePending && !inviter.partnerInviteAccepted) {
+      return NextResponse.json(
+        { message: 'Invitation has already been used or canceled' },
+        { status: 400 }
+      );
+    }
+
+    // Check if the partner email matches
+    if (inviter.partnerEmail !== decoded.partnerEmail) {
+      console.log('Email mismatch:', {
+        tokenEmail: decoded.partnerEmail,
+        inviterPartnerEmail: inviter.partnerEmail
+      });
+      return NextResponse.json(
+        { message: 'Partner email mismatch' },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({
       valid: true,
       inviterId: inviter._id,
       inviterName: inviter.fullName,
-      inviterWeddingDate: inviter.weddingDate,
-      partnerEmail: decoded.partnerEmail,
-      partnerName: inviter.partnerName || '',
-      partnerPhone: inviter.partnerPhone || '',
-      partnerExists: existingPartner ? true : false,
-      partnerId: existingPartner ? existingPartner._id : null,
-      invitationStatus: inviter.partnerInviteAccepted ? 'accepted' : 'pending'
+      partnerEmail: decoded.partnerEmail
     });
 
   } catch (error) {
