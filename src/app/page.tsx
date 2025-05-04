@@ -3,10 +3,11 @@ import './globals.css';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, FormEvent } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
+
 
 const styles = {
   container: {
@@ -249,7 +250,8 @@ const styles = {
     justifyContent: 'center',
   },
   contactForm: {
-    maxWidth: '600px',
+    width: '90vw',
+    maxWidth: '900px',
     margin: '0 auto',
     backgroundColor: 'white',
     padding: '2rem',
@@ -339,6 +341,21 @@ export default function HomePage() {
   const [activeSection, setActiveSection] = useState(0);
   const isScrolling = useRef(false);
   const touchStartY = useRef(0);
+  
+  // הוספת state לטופס יצירת קשר
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    message: ''
+  });
+  
+  const [formStatus, setFormStatus] = useState({
+    isSubmitting: false,
+    isSuccess: false,
+    isError: false,
+    errorMessage: ''
+  });
   
   // רפרנסים לחלקי העמוד
   const heroSectionRef = useRef<HTMLElement>(null);
@@ -458,6 +475,7 @@ export default function HomePage() {
       } 
     }
   };
+
 
   // ערבוב התמונות בסדר רנדומלי בכל טעינה
   useEffect(() => {
@@ -612,6 +630,70 @@ export default function HomePage() {
       window.removeEventListener('navigate-section', handleNavigationEvent);
     };
   }, []);
+
+  // פונקציות חדשות לטיפול בטופס יצירת קשר
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+  
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    
+    setFormStatus({
+      isSubmitting: true,
+      isSuccess: false,
+      isError: false,
+      errorMessage: ''
+    });
+    
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'שגיאה בשליחת הטופס');
+      }
+      
+      // איפוס הטופס
+      setFormData({
+        name: '',
+        email: '',
+        phone: '',
+        message: ''
+      });
+      
+      setFormStatus({
+        isSubmitting: false,
+        isSuccess: true,
+        isError: false,
+        errorMessage: ''
+      });
+      
+      // הצגת הודעת הצלחה למשך 3 שניות
+      setTimeout(() => {
+        setFormStatus(prev => ({ ...prev, isSuccess: false }));
+      }, 3000);
+      
+    } catch (error) {
+      setFormStatus({
+        isSubmitting: false,
+        isSuccess: false,
+        isError: true,
+        errorMessage: error instanceof Error ? error.message : 'שגיאה בלתי צפויה'
+      });
+    }
+  };
 
   if (isLoading) {
     return (
@@ -925,6 +1007,7 @@ export default function HomePage() {
             width: '100%',
             top: 0,
             left: 0,
+            zIndex: 1000,
           }}
           initial={false}
           animate={{
@@ -941,13 +1024,17 @@ export default function HomePage() {
           <section style={styles.section}>
             <h2 style={styles.sectionTitle}>צור קשר</h2>
             <div style={styles.contactForm}>
-              <form>
+              <form onSubmit={handleSubmit}>
                 <div style={styles.formGroup}>
                   <label style={styles.formLabel}>שם מלא</label>
                   <input 
                     type="text" 
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
                     style={styles.formInput} 
                     placeholder="הזן את שמך המלא" 
+                    required
                   />
                 </div>
                 
@@ -955,8 +1042,12 @@ export default function HomePage() {
                   <label style={styles.formLabel}>כתובת אימייל</label>
                   <input 
                     type="email" 
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
                     style={styles.formInput} 
                     placeholder="הזן את כתובת האימייל שלך" 
+                    required
                   />
                 </div>
                 
@@ -964,6 +1055,9 @@ export default function HomePage() {
                   <label style={styles.formLabel}>מספר טלפון</label>
                   <input 
                     type="tel" 
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
                     style={styles.formInput} 
                     placeholder="הזן את מספר הטלפון שלך" 
                   />
@@ -972,18 +1066,47 @@ export default function HomePage() {
                 <div style={styles.formGroup}>
                   <label style={styles.formLabel}>הודעה</label>
                   <textarea 
+                    name="message"
+                    value={formData.message}
+                    onChange={handleInputChange}
                     style={styles.formTextarea} 
                     placeholder="כתוב את הודעתך כאן..."
+                    required
                   ></textarea>
                 </div>
+                
+                {formStatus.isSuccess && (
+                  <div style={{ 
+                    padding: '10px', 
+                    backgroundColor: '#d4edda', 
+                    color: '#155724',
+                    borderRadius: '4px',
+                    marginBottom: '1rem'
+                  }}>
+                    ההודעה נשלחה בהצלחה!
+                  </div>
+                )}
+                
+                {formStatus.isError && (
+                  <div style={{ 
+                    padding: '10px', 
+                    backgroundColor: '#f8d7da', 
+                    color: '#721c24',
+                    borderRadius: '4px',
+                    marginBottom: '1rem'
+                  }}>
+                    {formStatus.errorMessage}
+                  </div>
+                )}
                 
                 <motion.button 
                   type="submit" 
                   style={styles.submitButton}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
+                  disabled={formStatus.isSubmitting}
                 >
-                  שלח הודעה
+                  {formStatus.isSubmitting ? 'שולח...' : 'שלח הודעה'}
                 </motion.button>
               </form>
             </div>

@@ -2,7 +2,7 @@
 
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import Navbar from '@/components/Navbar';
 import Head from 'next/head';
 import * as XLSX from 'xlsx';
@@ -83,6 +83,40 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const [showImportStatus, setShowImportStatus] = useState(false);
   const [importProgress, setImportProgress] = useState<{ current: number, total: number, currentName: string }>({ current: 0, total: 0, currentName: '' });
   const [importOverlay, setImportOverlay] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50; // שינוי מ-10 ל-50
+
+  // First define filteredGuests
+  const filteredGuests = useMemo(() => {
+    // existing filtering logic
+    return guests && Array.isArray(guests) ? guests
+      .filter(guest => {
+        console.log('Filtering guest:', guest);
+        
+        // סינון לפי סטטוס
+        if (filter === 'confirmed' && guest.isConfirmed !== true) return false;
+        if (filter === 'declined' && guest.isConfirmed !== false) return false;
+        if (filter === 'pending' && guest.isConfirmed !== null) return false;
+
+        // סינון לפי צד
+        if (sideFilter !== 'all' && guest.side !== sideFilter) return false;
+
+        // סינון לפי חיפוש
+        if (searchQuery && !guest.name.includes(searchQuery) && !guest.phoneNumber?.includes(searchQuery)) return false;
+
+        return true;
+      }) : [];
+  }, [guests, filter, sideFilter, searchQuery]);
+
+  // Then define the pagination variables
+  const paginatedGuests = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredGuests.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredGuests, currentPage, itemsPerPage]);
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredGuests.length / itemsPerPage);
+  }, [filteredGuests, itemsPerPage]);
 
   // פונקציה שמחזירה נתונים מהקאש או מבצעת בקשה חדשה
   const fetchWithCache = async (url: string, cacheKey: string) => {
@@ -162,6 +196,11 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     cleanupExampleGuests();
   }, [guests.length]);
 
+  // הוסף useEffect לבדוק את מצב הרינדור
+  useEffect(() => {
+    console.log('Component rendered with guests:', guests.length);
+  }, [guests]);
+
   const fetchUserProfile = async () => {
     try {
       const cacheKey = `user-${params.id}`;
@@ -181,41 +220,73 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
   const fetchGuestlist = async () => {
     try {
-      const cacheKey = `guests-${params.id}`;
-      console.log(`Attempting to fetch guestlist with cacheKey: ${cacheKey}`);
-      const data = await fetchWithCache(`/api/guests?userId=${params.id}`, cacheKey);
-      console.log('Raw API response:', data);
+      console.log(`Attempting to fetch guestlist for user: ${params.id}`);
       
-      // בדיקה שהתשובה מכילה מערך אורחים
+      const response = await fetch(`/api/guests?userId=${params.id}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log('API response structure:', JSON.stringify(data, null, 2));
+      
+      // בדיקת מבנה הנתונים החוזרים
       if (!data || !data.guests) {
         console.error('Invalid API response:', data);
         setGuests([]);
         return;
       }
       
-      // קבלת האורחים מהתשובה
-      const fetchedGuests = Array.isArray(data.guests) ? data.guests : [];
-      console.log('Fetched guests:', fetchedGuests.length);
+      // בדיקה אם guests הוא מערך ישירות או מבנה מורכב יותר
+      let fetchedGuests = [];
+      
+      if (Array.isArray(data.guests)) {
+        // אם זה מערך ישיר
+        fetchedGuests = data.guests;
+        console.log('Guests are in array format:', fetchedGuests.length);
+      } else if (data.guests.sides) {
+        // אם זה מבנה מורכב עם צדדים
+        console.log('Guests are in sides structure:', data.guests);
+        fetchedGuests = [
+          ...data.guests.sides['חתן'],
+          ...data.guests.sides['כלה'],
+          ...data.guests.sides['משותף']
+        ];
+        console.log('Combined guests from sides:', fetchedGuests.length);
+      } else {
+        console.error('Unexpected guests format:', data.guests);
+      }
+      
+      console.log('First guest in list:', fetchedGuests[0]);
       
       // הסרת אורחי דוגמה אם קיימים
-      const cleanedGuests = await removeExampleGuests(fetchedGuests);
+      const cleanedGuests = await removeExampleGuests([...fetchedGuests]);
       
+      console.log('Setting guests state with:', cleanedGuests.length, 'guests');
+      console.log('Example guest:', cleanedGuests[0]);
       setGuests(cleanedGuests);
     } catch (error) {
       console.error('Error in fetchGuestlist:', error);
       setError('שגיאה בטעינת רשימת האורחים');
       setGuests([]);
-      throw error;
     }
   };
   
   // פונקציה למחיקת אורחי דוגמה אוטומטית
-  const removeExampleGuests = async (guestList: Guest[] | unknown) => {
+  const removeExampleGuests = async (guestList: Guest[]) => {
     // וידוא שהנתונים הם אכן מערך 
     if (!Array.isArray(guestList)) {
       console.error('guestList is not an array:', guestList);
       return [];
     }
+    
+    console.log('Before removing examples, guest count:', guestList.length);
     
     // שמות של אורחי דוגמה מוכרים
     const exampleNames = ['ישראל ישראלי', 'שרה לוי', 'משפחת כהן'];
@@ -276,14 +347,21 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   };
 
   const handleAddGuest = async () => {
-    if (!newGuest.name.trim()) return;
-    
+    console.log('*** התחלת פונקציית הוספת אורח ***');
+    console.log('מצב newGuest:', newGuest);
+  
     try {
+      if (!newGuest.name.trim()) {
+        alert('נא להזין שם אורח');
+        return;
+      }
+  
       const guestToAdd = {
         ...newGuest,
-        userId: params.id
+        userId: params.id,
+        numberOfGuests: parseInt(String(newGuest.numberOfGuests)) || 1,
       };
-      
+  
       const response = await fetch('/api/guests', {
         method: 'POST',
         headers: {
@@ -291,35 +369,48 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         },
         body: JSON.stringify(guestToAdd),
       });
-      
-      const data = await response.json();
-      
+  
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to add guest');
+        const errorText = await response.text();
+        throw new Error(`שגיאה בהוספת אורח - קוד ${response.status}: ${errorText}`);
       }
-      
-      // Add the new guest to the state
-      setGuests([...guests, data.guest]);
-      
-      // ניקוי המטמון כדי לגרום לטעינה מחדש בפעם הבאה
-      const cacheKey = `guests-${params.id}`;
-      dataCache.delete(cacheKey);
-      
-      // Reset the form
-      setNewGuest({
-        name: '',
-        phoneNumber: '',
-        numberOfGuests: 0,
-        side: 'משותף',
-        isConfirmed: null,
-        notes: ''
-      });
-      setIsAddingGuest(false);
+  
+      const data = await response.json();
+  
+      if (data && data.guest) {
+        console.log('התקבל אורח חדש מהשרת:', data.guest);
+  
+        // הוספה מיידית לסטייט
+        setGuests(prevGuests => [...prevGuests, data.guest]);
+  
+        // איפוס הטופס
+        setNewGuest({
+          name: '',
+          phoneNumber: '',
+          numberOfGuests: 0,
+          side: 'משותף',
+          isConfirmed: null,
+          notes: '',
+        });
+  
+        // הודעה קטנה למשתמש (אם תוסיף Toast זה ישתלב כאן)
+  
+        // רענון ברקע אחרי 2 שניות
+        setTimeout(() => {
+          console.log('מרענן רשימת אורחים מלאה מהשרת...');
+          const cacheKey = `guests-${params.id}`;
+          dataCache.delete(cacheKey); // גם מנקה קאש
+          fetchGuestlist();
+        }, 2000);
+      } else {
+        throw new Error('לא התקבל אורח תקין מהשרת');
+      }
     } catch (error) {
-      console.error('Failed to add guest:', error);
-      alert('Failed to add guest. Please try again.');
+      console.error('שגיאה בהוספת אורח:', error);
+      alert(`שגיאה בהוספת אורח: ${error instanceof Error ? error.message : 'שגיאה לא ידועה'}`);
     }
   };
+  
 
   const handleEditGuest = async (guest: Guest) => {
     try {
@@ -424,22 +515,6 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       confirmedGuests
     };
   };
-
-  const filteredGuests = guests
-    .filter(guest => {
-      // סינון לפי סטטוס
-      if (filter === 'confirmed' && guest.isConfirmed !== true) return false;
-      if (filter === 'declined' && guest.isConfirmed !== false) return false;
-      if (filter === 'pending' && guest.isConfirmed !== null) return false;
-
-      // סינון לפי צד
-      if (sideFilter !== 'all' && guest.side !== sideFilter) return false;
-
-      // סינון לפי חיפוש
-      if (searchQuery && !guest.name.includes(searchQuery) && !guest.phoneNumber?.includes(searchQuery)) return false;
-
-      return true;
-    });
 
   const handleExcelImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1165,6 +1240,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
   const stats = getGuestStats();
 
+  
   return (
     <>
       <Head>
@@ -1309,7 +1385,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
                 </svg>
-                הוסף אורח
+                      הוסף אורח
               </button>
               
               <div className="flex gap-2">
@@ -1443,276 +1519,368 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
           {/* טבלת האורחים */}
           <div className="bg-white rounded-xl shadow-lg overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      שם אורח
-                    </th>
-                    <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      מספר טלפון
-                    </th>
-                    <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      מספר מוזמנים
-                    </th>
-                    <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      מהצד של
-                    </th>
-                    <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      סטטוס
-                    </th>
-                    <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      הערות
-                    </th>
-                    <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
-                      פעולות
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredGuests.map(guest => (
-                    <tr key={guest._id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-5 whitespace-nowrap">
-                        {editingGuestId === guest._id ? (
+              {/* Logs for debugging */}
+              {(() => {
+                console.log('In JSX, guests length:', guests.length);
+                console.log('In JSX, filteredGuests length:', filteredGuests.length);
+                return null;
+              })()}
+              
+              {!Array.isArray(guests) ? (
+                <div className="text-center p-8">שגיאה: הנתונים אינם במבנה הנכון</div>
+              ) : guests.length === 0 ? (
+                <div className="text-center p-8">
+                  <p className="text-gray-500 mb-4">אין אורחים ברשימה</p>
+                  <button 
+                    onClick={() => fetchGuestlist()} 
+                    className="text-blue-500 underline px-4 py-2 border rounded-lg"
+                  >
+                    נסה לטעון מחדש
+                  </button>
+                </div>
+              ) : (
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
+                        שם אורח
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
+                        מספר טלפון
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
+                        מספר מוזמנים
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
+                        מהצד של
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
+                        סטטוס
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
+                        הערות
+                      </th>
+                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
+                        פעולות
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {paginatedGuests.map(guest => (
+                      <tr key={guest._id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          {editingGuestId === guest._id ? (
+                            <input
+                              type="text"
+                              value={guest.name}
+                              onChange={(e) => handleEditGuest({...guest, name: e.target.value})}
+                              className="w-full p-2 border border-gray-300 rounded text-lg"
+                            />
+                          ) : (
+                            <div className="text-base font-medium text-gray-900">{guest.name}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          {editingGuestId === guest._id ? (
+                            <input
+                              type="text"
+                              value={guest.phoneNumber}
+                              onChange={(e) => handleEditGuest({...guest, phoneNumber: e.target.value})}
+                              className="w-full p-2 border border-gray-300 rounded text-lg"
+                            />
+                          ) : (
+                            <div className="text-base text-gray-600">{guest.phoneNumber}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                          {editingGuestId === guest._id ? (
+                            <input
+                              type="number"
+                              min="0"
+                              value={guest.numberOfGuests}
+                              onChange={(e) => handleEditGuest({...guest, numberOfGuests: parseInt(e.target.value) || 0})}
+                              className="w-20 p-2 border border-gray-300 rounded text-center text-lg"
+                            />
+                          ) : (
+                            <div className="text-base text-gray-900 font-medium">{guest.numberOfGuests}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                          {editingGuestId === guest._id ? (
+                            <select
+                              value={guest.side}
+                              onChange={(e) => handleEditGuest({...guest, side: e.target.value as 'חתן' | 'כלה' | 'משותף'})}
+                              className="p-2 border border-gray-300 rounded text-lg"
+                            >
+                              <option value="חתן">חתן</option>
+                              <option value="כלה">כלה</option>
+                              <option value="משותף">משותף</option>
+                            </select>
+                          ) : (
+                            <span className={`px-3 py-1.5 inline-flex text-sm leading-5 font-semibold rounded-full ${
+                              guest.side === 'חתן' ? 'bg-blue-100 text-blue-800' : 
+                              guest.side === 'כלה' ? 'bg-pink-100 text-pink-800' : 
+                              'bg-purple-100 text-purple-800'
+                            }`}>
+                              {guest.side}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                          <div className="grid grid-cols-3 gap-4 w-[160px] mx-auto">
+                            <button
+                              onClick={() => handleConfirmGuest(guest._id, true)}
+                              className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              title="אישר/ה הגעה"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleConfirmGuest(guest._id, false)}
+                              className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              title="לא מגיע/ה"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => handleConfirmGuest(guest._id, null)}
+                              className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              title="ממתין/ה לאישור"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          {editingGuestId === guest._id ? (
+                            <input
+                              type="text"
+                              value={guest.notes}
+                              onChange={(e) => handleEditGuest({...guest, notes: e.target.value})}
+                              className="w-full p-2 border border-gray-300 rounded text-lg"
+                            />
+                          ) : (
+                            <div className="text-base text-gray-600">{guest.notes}</div>
+                          )}
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                          {editingGuestId === guest._id ? (
+                            <button 
+                              onClick={() => handleEditGuest(guest)} 
+                              className="text-green-600 hover:text-green-900 text-lg font-medium"
+                            >
+                              שמור
+                            </button>
+                          ) : (
+                            <div className="flex justify-center space-x-6">
+                              <button 
+                                onClick={() => handleEditGuest(guest)} 
+                                className="text-indigo-600 hover:text-indigo-900 p-1.5 hover:bg-indigo-100 rounded-full transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                </svg>
+                              </button>
+                              <button 
+                                onClick={() => handleDeleteGuest(guest._id)} 
+                                className="text-red-600 hover:text-red-900 p-1.5 hover:bg-red-100 rounded-full transition-colors"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+
+                    {/* שורה להוספת אורח חדש */}
+                    {isAddingGuest && (
+                      <tr className="bg-blue-50">
+                        <td className="px-6 py-5 whitespace-nowrap">
                           <input
                             type="text"
-                            value={guest.name}
-                            onChange={(e) => handleEditGuest({...guest, name: e.target.value})}
+                            value={newGuest.name}
+                            onChange={(e) => setNewGuest({...newGuest, name: e.target.value})}
+                            placeholder="שם האורח"
                             className="w-full p-2 border border-gray-300 rounded text-lg"
+                            autoFocus
                           />
-                        ) : (
-                          <div className="text-base font-medium text-gray-900">{guest.name}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap">
-                        {editingGuestId === guest._id ? (
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap">
                           <input
                             type="text"
-                            value={guest.phoneNumber}
-                            onChange={(e) => handleEditGuest({...guest, phoneNumber: e.target.value})}
+                            value={newGuest.phoneNumber}
+                            onChange={(e) => setNewGuest({...newGuest, phoneNumber: e.target.value})}
+                            placeholder="מספר טלפון"
                             className="w-full p-2 border border-gray-300 rounded text-lg"
                           />
-                        ) : (
-                          <div className="text-base text-gray-600">{guest.phoneNumber}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        {editingGuestId === guest._id ? (
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
                           <input
                             type="number"
                             min="0"
-                            value={guest.numberOfGuests}
-                            onChange={(e) => handleEditGuest({...guest, numberOfGuests: parseInt(e.target.value) || 0})}
+                            value={newGuest.numberOfGuests}
+                            onChange={(e) => setNewGuest({...newGuest, numberOfGuests: parseInt(e.target.value) || 0})}
                             className="w-20 p-2 border border-gray-300 rounded text-center text-lg"
                           />
-                        ) : (
-                          <div className="text-base text-gray-900 font-medium">{guest.numberOfGuests}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        {editingGuestId === guest._id ? (
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
                           <select
-                            value={guest.side}
-                            onChange={(e) => handleEditGuest({...guest, side: e.target.value as 'חתן' | 'כלה' | 'משותף'})}
+                            value={newGuest.side}
+                            onChange={(e) => setNewGuest({...newGuest, side: e.target.value as 'חתן' | 'כלה' | 'משותף'})}
                             className="p-2 border border-gray-300 rounded text-lg"
                           >
                             <option value="חתן">חתן</option>
                             <option value="כלה">כלה</option>
                             <option value="משותף">משותף</option>
                           </select>
-                        ) : (
-                          <span className={`px-3 py-1.5 inline-flex text-sm leading-5 font-semibold rounded-full ${
-                            guest.side === 'חתן' ? 'bg-blue-100 text-blue-800' : 
-                            guest.side === 'כלה' ? 'bg-pink-100 text-pink-800' : 
-                            'bg-purple-100 text-purple-800'
-                          }`}>
-                            {guest.side}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        <div className="grid grid-cols-3 gap-4 w-[160px] mx-auto">
-                          <button
-                            onClick={() => handleConfirmGuest(guest._id, true)}
-                            className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                            title="אישר/ה הגעה"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleConfirmGuest(guest._id, false)}
-                            className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                            title="לא מגיע/ה"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => handleConfirmGuest(guest._id, null)}
-                            className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                            title="ממתין/ה לאישור"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap">
-                        {editingGuestId === guest._id ? (
-                          <input
-                            type="text"
-                            value={guest.notes}
-                            onChange={(e) => handleEditGuest({...guest, notes: e.target.value})}
-                            className="w-full p-2 border border-gray-300 rounded text-lg"
-                          />
-                        ) : (
-                          <div className="text-base text-gray-600">{guest.notes}</div>
-                        )}
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        {editingGuestId === guest._id ? (
-                          <button 
-                            onClick={() => handleEditGuest(guest)} 
-                            className="text-green-600 hover:text-green-900 text-lg font-medium"
-                          >
-                            שמור
-                          </button>
-                        ) : (
-                          <div className="flex justify-center space-x-6">
-                            <button 
-                              onClick={() => handleEditGuest(guest)} 
-                              className="text-indigo-600 hover:text-indigo-900 p-1.5 hover:bg-indigo-100 rounded-full transition-colors"
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                          <div className="grid grid-cols-3 gap-4 w-[160px] mx-auto">
+                            <button
+                              onClick={() => setNewGuest({...newGuest, isConfirmed: true})}
+                              className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              title="אישר/ה הגעה"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                               </svg>
                             </button>
-                            <button 
-                              onClick={() => handleDeleteGuest(guest._id)} 
-                              className="text-red-600 hover:text-red-900 p-1.5 hover:bg-red-100 rounded-full transition-colors"
+                            <button
+                              onClick={() => setNewGuest({...newGuest, isConfirmed: false})}
+                              className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              title="לא מגיע/ה"
                             >
                               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => setNewGuest({...newGuest, isConfirmed: null})}
+                              className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              title="ממתין/ה לאישור"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                               </svg>
                             </button>
                           </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-
-                  {/* שורה להוספת אורח חדש */}
-                  {isAddingGuest && (
-                    <tr className="bg-blue-50">
-                      <td className="px-6 py-5 whitespace-nowrap">
-                        <input
-                          type="text"
-                          value={newGuest.name}
-                          onChange={(e) => setNewGuest({...newGuest, name: e.target.value})}
-                          placeholder="שם האורח"
-                          className="w-full p-2 border border-gray-300 rounded text-lg"
-                          autoFocus
-                        />
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap">
-                        <input
-                          type="text"
-                          value={newGuest.phoneNumber}
-                          onChange={(e) => setNewGuest({...newGuest, phoneNumber: e.target.value})}
-                          placeholder="מספר טלפון"
-                          className="w-full p-2 border border-gray-300 rounded text-lg"
-                        />
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        <input
-                          type="number"
-                          min="0"
-                          value={newGuest.numberOfGuests}
-                          onChange={(e) => setNewGuest({...newGuest, numberOfGuests: parseInt(e.target.value) || 0})}
-                          className="w-20 p-2 border border-gray-300 rounded text-center text-lg"
-                        />
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        <select
-                          value={newGuest.side}
-                          onChange={(e) => setNewGuest({...newGuest, side: e.target.value as 'חתן' | 'כלה' | 'משותף'})}
-                          className="p-2 border border-gray-300 rounded text-lg"
-                        >
-                          <option value="חתן">חתן</option>
-                          <option value="כלה">כלה</option>
-                          <option value="משותף">משותף</option>
-                        </select>
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        <div className="grid grid-cols-3 gap-4 w-[160px] mx-auto">
-                          <button
-                            onClick={() => setNewGuest({...newGuest, isConfirmed: true})}
-                            className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                            title="אישר/ה הגעה"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => setNewGuest({...newGuest, isConfirmed: false})}
-                            className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                            title="לא מגיע/ה"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => setNewGuest({...newGuest, isConfirmed: null})}
-                            className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                            title="ממתין/ה לאישור"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap">
-                        <input
-                          type="text"
-                          value={newGuest.notes}
-                          onChange={(e) => setNewGuest({...newGuest, notes: e.target.value})}
-                          placeholder="הערות"
-                          className="w-full p-2 border border-gray-300 rounded text-lg"
-                        />
-                      </td>
-                      <td className="px-6 py-5 whitespace-nowrap text-center">
-                        <div className="flex justify-center space-x-6">
-                          <button
-                            onClick={handleAddGuest}
-                            className="bg-green-600 text-white p-2 rounded-full hover:bg-green-700 transition-colors"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={() => setIsAddingGuest(false)}
-                            className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors"
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293-1.293a1 1 0 00-1.414-1.414L10 10l-1.293-1.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 000 1.414z" clipRule="evenodd" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap">
+                          <input
+                            type="text"
+                            value={newGuest.notes}
+                            onChange={(e) => setNewGuest({...newGuest, notes: e.target.value})}
+                            placeholder="הערות"
+                            className="w-full p-2 border border-gray-300 rounded text-lg"
+                          />
+                        </td>
+                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                          <div className="flex justify-between gap-2">
+                            {/* טופס הוספת אורח - כפתור משופר */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault(); // עצירת פעולות ברירת מחדל
+                                console.log('*** כפתור נלחץ - מתחיל תהליך הוספת אורח ***', new Date().toISOString());
+                                console.log('מצב הכפתור:', !newGuest.name.trim() ? 'לא פעיל' : 'פעיל');
+                                console.log('שם אורח:', newGuest.name);
+                                handleAddGuest();
+                              }}
+                              disabled={!newGuest.name.trim()}
+                              className={`flex-grow p-2 rounded-md ${
+                               !newGuest.name.trim() 
+                                  ? 'bg-gray-300 cursor-not-allowed' 
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
+                              }`}
+                            >
+                              הוסף אורח
+                            </button>
+                            {/* כפתור גיבוי מסוג div לבדיקה */}
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              onClick={() => {
+                                console.log('*** DIV גיבוי נלחץ ***');
+                                handleAddGuest();
+                              }}
+                              className="flex-grow p-2 rounded-md bg-green-600 hover:bg-green-700 text-white cursor-pointer text-center mt-2"
+                            >
+                              נסה להוסיף אורח (גיבוי)
+                            </div>
+                            <button
+                              onClick={() => setIsAddingGuest(false)}
+                              className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                              </svg>
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* רכיב דפדוף משופר מתחת לטבלה */}
+      <div className="mt-8 flex flex-col items-center justify-center">
+        <div className="flex items-center justify-between w-full max-w-md bg-white rounded-lg shadow-sm p-2 mb-4">
+          <button
+            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className={`flex items-center justify-center px-4 py-2 rounded ${
+              currentPage === 1 
+              ? 'text-gray-400 cursor-not-allowed' 
+              : 'text-blue-600 hover:bg-blue-50 transition-colors'
+            }`}
+          >
+            <svg className="h-5 w-5 rtl:rotate-180" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            <span className="mr-2">הקודם</span>
+          </button>
+          
+          <span className="text-sm font-medium">
+            דף {currentPage} מתוך {totalPages || 1}
+          </span>
+          
+          <button
+            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages || totalPages === 0}
+            className={`flex items-center justify-center px-4 py-2 rounded ${
+              currentPage === totalPages || totalPages === 0
+              ? 'text-gray-400 cursor-not-allowed' 
+              : 'text-blue-600 hover:bg-blue-50 transition-colors'
+            }`}
+          >
+            <span className="ml-2">הבא</span>
+            <svg className="h-5 w-5 rtl:rotate-180" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </div>
+        
+        <div className="text-sm text-gray-600 flex items-center">
+          מציג {paginatedGuests.length} אורחים מתוך {filteredGuests.length} בסך הכל
+          {filteredGuests.length > 0 && (
+            <span className="mx-2 px-2 py-1 bg-blue-50 text-blue-700 rounded-full text-xs">
+              {Math.ceil(filteredGuests.length / itemsPerPage)} דפים
+            </span>
+          )}
         </div>
       </div>
     </>
