@@ -81,6 +81,51 @@ export async function POST(
       );
     }
 
+    // עדכן את המשתמש עם השדות שהם חלק מפרופיל המשתמש
+    user.expectedGuests = data.guestsCount || user.expectedGuests;
+    user.budget = data.estimatedBudget || user.budget;
+    await user.save();
+
+    // אם יש קישור למשתמש אחר, סנכרן גם את פרטי החתונה שלו
+    if (user.connectedUserId) {
+      try {
+        console.log(`Syncing wedding preferences with connected user: ${user.connectedUserId}`);
+        
+        // עדכן את המשתמש המקושר
+        const connectedUser = await User.findById(user.connectedUserId);
+        if (connectedUser) {
+          // סנכרן שדות מהמשתמש הנוכחי למשתמש המקושר
+          connectedUser.expectedGuests = user.expectedGuests;
+          connectedUser.budget = user.budget;
+          await connectedUser.save();
+
+          // מצא או צור העדפות עבור המשתמש המקושר
+          const connectedPreferences = await WeddingPreferences.findOne({ userId: connectedUser._id });
+          
+          if (connectedPreferences) {
+            // עדכן את ההעדפות הקיימות של השותף
+            connectedPreferences.venueType = preferences.venueType;
+            connectedPreferences.timeOfDay = preferences.timeOfDay;
+            connectedPreferences.location = preferences.location;
+            await connectedPreferences.save();
+          } else {
+            // צור העדפות חדשות עבור השותף
+            await WeddingPreferences.create({
+              userId: connectedUser._id,
+              venueType: preferences.venueType,
+              timeOfDay: preferences.timeOfDay,
+              location: preferences.location
+            });
+          }
+          
+          console.log('Successfully synced wedding preferences with connected user');
+        }
+      } catch (syncError) {
+        console.error('Error syncing wedding preferences with connected user:', syncError);
+        // המשך בביצוע גם אם הסנכרון נכשל
+      }
+    }
+
     // החזר את התשובה בפורמט הנדרש
     const response = {
       venueType: preferences.venueType,

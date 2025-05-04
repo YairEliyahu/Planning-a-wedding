@@ -166,6 +166,35 @@ export default function ChecklistPage({ params }: { params: { id: string } }) {
     checkAuth();
   }, [isAuthReady, user, params.id, router]);
 
+  // רענון אוטומטי של נתוני הצ'קליסט אם המשתמש מחובר למשתמש אחר
+  useEffect(() => {
+    if (user && user.connectedUserId) {
+      console.log(`User has connected account ${user.connectedUserId}, setting up auto-refresh for checklist`);
+      let autoRefreshInterval: NodeJS.Timeout;
+
+      // רענון ראשוני
+      const initialDelay = setTimeout(() => {
+        console.log('Initial refresh of checklist for connected accounts');
+        dataCache.clear(); // ניקוי מטמון
+        fetchChecklist();
+
+        // רענון כל 30 שניות
+        autoRefreshInterval = setInterval(() => {
+          console.log('Auto-refreshing checklist for connected accounts...');
+          // ניקוי המטמון לפני הרענון כדי לקבל תמיד את הנתונים העדכניים ביותר
+          dataCache.clear();
+          fetchChecklist();
+        }, 30000); // 30 seconds refresh
+      }, 5000); // Initial delay of 5 seconds
+
+      // ניקוי בעת עזיבת הקומפוננטה
+      return () => {
+        clearTimeout(initialDelay);
+        clearInterval(autoRefreshInterval);
+      };
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!categories || categories.length === 0) {
       setCategories(defaultCategories);

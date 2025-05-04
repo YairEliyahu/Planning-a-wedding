@@ -7,6 +7,7 @@ import Navbar from '@/components/Navbar';
 import Head from 'next/head';
 import * as XLSX from 'xlsx';
 import LoadingSpinner from '../../../components/LoadingSpinner';
+import { Button } from '@/components/ui/button';
 
 interface Guest {
   _id: string;
@@ -18,30 +19,7 @@ interface Guest {
   notes: string;
   createdAt: Date;
   updatedAt: Date;
-}
-
-interface UserProfile {
-  _id: string;
-  fullName: string;
-  email: string;
-  phoneNumber: string;
-  weddingDate: string;
-  partnerName: string;
-  partnerPhone: string;
-  expectedGuests: string;
-  weddingLocation: string;
-  budget: string;
-  preferences: {
-    venue: boolean;
-    catering: boolean;
-    photography: boolean;
-    music: boolean;
-    design: boolean;
-  };
-  isProfileComplete: boolean;
-  authProvider: string;
-  gender: 'male' | 'female';
-  partnerGender: 'male' | 'female';
+  sharedEventId?: string;
 }
 
 type NewGuest = Omit<Guest, '_id' | 'createdAt' | 'updatedAt'>;
@@ -55,7 +33,6 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [guests, setGuests] = useState<Guest[]>([]);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [newGuest, setNewGuest] = useState<NewGuest>({
     name: '',
     phoneNumber: '',
@@ -201,6 +178,35 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     console.log('Component rendered with guests:', guests.length);
   }, [guests]);
 
+  // רענון אוטומטי של רשימת המוזמנים אם המשתמש מחובר למשתמש אחר
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (user && user.connectedUserId) {
+      console.log(`User has connected account ${user.connectedUserId}, setting up auto-refresh`);
+      let autoRefreshInterval: NodeJS.Timeout;
+
+      // רענון ראשוני
+      const initialDelay = setTimeout(() => {
+        console.log('Initial refresh of guest list for connected accounts');
+        dataCache.clear(); // ניקוי מטמון
+        fetchGuestlist();
+
+        // רענון כל 15 שניות במקום 30 - תדירות גבוהה יותר עבור חשבונות מקושרים
+        autoRefreshInterval = setInterval(() => {
+          console.log('Auto-refreshing guest list for connected accounts...');
+          // ניקוי המטמון לפני הרענון כדי לקבל תמיד את הנתונים העדכניים ביותר
+          dataCache.clear();
+          fetchGuestlist();
+        }, 15000); // 15 seconds refresh
+      }, 1000);
+
+      return () => {
+        clearTimeout(initialDelay);
+        clearInterval(autoRefreshInterval);
+      };
+    }
+  }, [user, user?.connectedUserId, user?.sharedEventId]);
+
   const fetchUserProfile = async () => {
     try {
       const cacheKey = `user-${params.id}`;
@@ -211,7 +217,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         return;
       }
 
-      setProfile(data.user);
+      // setProfile(data.user);
     } catch (err) {
       setError('שגיאה בטעינת פרופיל המשתמש');
       throw err;
@@ -221,11 +227,21 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const fetchGuestlist = async () => {
     try {
       console.log(`Attempting to fetch guestlist for user: ${params.id}`);
+      console.log('User connected status:', user?.connectedUserId ? `Connected to user ${user.connectedUserId}` : 'Not connected');
+      console.log('SharedEventId:', user?.sharedEventId || 'None');
       
-      const response = await fetch(`/api/guests?userId=${params.id}`, {
+      // נקה את זיכרון המטמון לגבי רשימת המוזמנים
+      const cacheKey = `guests-${params.id}`;
+      dataCache.delete(cacheKey);
+      
+      // הוסף פרמטר timestamp כדי למנוע קאשינג בדפדפן
+      const timestamp = new Date().getTime();
+      const forceSyncParam = user?.connectedUserId ? 'forceSync=true' : '';
+      const response = await fetch(`/api/guests?userId=${params.id}&t=${timestamp}&${forceSyncParam}`, {
         headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
       });
       
@@ -252,7 +268,6 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         console.log('Guests are in array format:', fetchedGuests.length);
       } else if (data.guests.sides) {
         // אם זה מבנה מורכב עם צדדים
-        console.log('Guests are in sides structure:', data.guests);
         fetchedGuests = [
           ...data.guests.sides['חתן'],
           ...data.guests.sides['כלה'],
@@ -263,13 +278,17 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         console.error('Unexpected guests format:', data.guests);
       }
       
-      console.log('First guest in list:', fetchedGuests[0]);
+      if (fetchedGuests.length > 0) {
+        console.log('First guest in list:', fetchedGuests[0]);
+      }
       
       // הסרת אורחי דוגמה אם קיימים
       const cleanedGuests = await removeExampleGuests([...fetchedGuests]);
       
       console.log('Setting guests state with:', cleanedGuests.length, 'guests');
-      console.log('Example guest:', cleanedGuests[0]);
+      if (cleanedGuests.length > 0) {
+        console.log('Example guest:', cleanedGuests[0]);
+      }
       setGuests(cleanedGuests);
     } catch (error) {
       console.error('Error in fetchGuestlist:', error);
@@ -356,18 +375,35 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         return;
       }
   
-      const guestToAdd = {
+      // הכנת אובייקט עם טיפוס נכון
+      const guestData: {
+        userId: string;
+        name: string;
+        phoneNumber?: string;
+        numberOfGuests: number;
+        side: 'חתן' | 'כלה' | 'משותף';
+        isConfirmed: boolean | null;
+        notes: string;
+        sharedEventId?: string;
+      } = {
         ...newGuest,
         userId: params.id,
         numberOfGuests: parseInt(String(newGuest.numberOfGuests)) || 1,
       };
+      
+      // אם המשתמש מחובר לשותף, נוסיף את מזהה האירוע המשותף
+      if (user?.sharedEventId) {
+        console.log('Adding shared event ID to new guest:', user.sharedEventId);
+        guestData.sharedEventId = user.sharedEventId;
+      }
   
       const response = await fetch('/api/guests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache', // מניעת קאשינג
         },
-        body: JSON.stringify(guestToAdd),
+        body: JSON.stringify(guestData),
       });
   
       if (!response.ok) {
@@ -393,15 +429,21 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
           notes: '',
         });
   
-        // הודעה קטנה למשתמש (אם תוסיף Toast זה ישתלב כאן)
-  
-        // רענון ברקע אחרי 2 שניות
+        // רענון ברקע אחרי שניה - ניקוי המטמון לקבלת נתונים טריים
         setTimeout(() => {
-          console.log('מרענן רשימת אורחים מלאה מהשרת...');
-          const cacheKey = `guests-${params.id}`;
-          dataCache.delete(cacheKey); // גם מנקה קאש
+          console.log('Refreshing guest list after adding new guest');
+          dataCache.clear();
           fetchGuestlist();
-        }, 2000);
+          
+          // אם יש משתמש מקושר, חכה עוד שנייה ורענן שוב לוודא שכל המידע מסונכרן
+          if (user?.connectedUserId) {
+            setTimeout(() => {
+              console.log('Second refresh to ensure sync with connected account');
+              dataCache.clear();
+              fetchGuestlist();
+            }, 2000);
+          }
+        }, 1000);
       } else {
         throw new Error('לא התקבל אורח תקין מהשרת');
       }
@@ -415,11 +457,19 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const handleEditGuest = async (guest: Guest) => {
     try {
       if (editingGuestId === guest._id) {
+        // הוספת sharedEventId אם המשתמש מחובר למשתמש אחר
+        if (user?.sharedEventId && !guest.sharedEventId) {
+          guest.sharedEventId = user.sharedEventId;
+          console.log('Adding shared event ID to edited guest:', user.sharedEventId);
+        }
+        
         // Call the API to update the guest
+        console.log('Sending update for guest:', guest);
         const response = await fetch(`/api/guests/${guest._id}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
+            'Cache-Control': 'no-cache',
           },
           body: JSON.stringify(guest),
         });
@@ -431,14 +481,33 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         }
         
         // Update the guest in the state
-        setGuests(guests.map(g => g._id === guest._id ? data.guest : g));
+        setGuests(prevGuests => 
+          prevGuests.map(g => g._id === guest._id ? data.guest : g)
+        );
+        
+        // רענון מלא מהשרת אחרי עדכון - חשוב לסנכרון
+        // נקה את המטמון לפני כדי לקבל נתונים טריים
+        dataCache.clear();
+        await fetchGuestlist();
+        
+        // Reset the editing state
         setEditingGuestId(null);
+        
+        // אם יש משתמש מקושר, חכה שנייה ורענן שוב לוודא שכל העדכונים הגיעו
+        if (user?.connectedUserId) {
+          setTimeout(() => {
+            console.log('Refreshing after edit to ensure sync with connected account');
+            dataCache.clear();
+            fetchGuestlist();
+          }, 2000);
+        }
       } else {
+        // Set this guest as the one being edited
         setEditingGuestId(guest._id);
       }
     } catch (error) {
-      console.error('Failed to update guest:', error);
-      alert('Failed to update guest. Please try again.');
+      console.error('Error editing guest:', error);
+      alert('Error editing guest: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -1201,6 +1270,63 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     }
   };
 
+  // הוסף ביטומבו חדש למטה לרענון רשימת האורחים
+  const handleForceRefresh = async () => {
+    try {
+      setIsLoading(true);
+      setError('');
+      
+      // נקה את הזיכרון המטמון
+      dataCache.clear();
+      
+      // קריאה ישירה ל-API ללא שימוש בקאש עם זמן ייחודי למניעת קאשינג
+      // וגם עם דגל לסינכרון מלא בין החשבונות
+      const timestamp = new Date().getTime();
+      const response = await fetch(`/api/guests?userId=${params.id}&t=${timestamp}&forceSync=true&forceRefresh=true`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      
+      // עיבוד התוצאות
+      let fetchedGuests = [];
+      
+      // בדיקה אם guests הוא מערך ישירות או מבנה מורכב יותר
+      if (Array.isArray(data.guests)) {
+        // אם זה מערך ישיר
+        fetchedGuests = data.guests;
+        console.log('Guests are in array format:', fetchedGuests.length);
+      } else if (data.guests && data.guests.sides) {
+        // אם זה מבנה מורכב עם צדדים
+        fetchedGuests = [
+          ...data.guests.sides['חתן'],
+          ...data.guests.sides['כלה'],
+          ...data.guests.sides['משותף']
+        ];
+      }
+      
+      // עדכון הסטייט
+      setGuests(fetchedGuests);
+      
+      // הודעת הצלחה זמנית
+      alert('רשימת האורחים סונכרנה בהצלחה');
+      
+    } catch (error) {
+      console.error('Error in force refresh:', error);
+      setError('שגיאה ברענון רשימת האורחים');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // יצירת רכיב טעינה
   if (!isAuthReady || isLoading) {
     return (
@@ -1305,12 +1431,42 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       
       <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white pt-16 pb-16">
         <div className="max-w-7xl mx-auto px-6 py-8">
-          <h1 className="text-5xl font-bold text-purple-800 text-center mb-3 font-mplus drop-shadow-sm">
-            רשימת המוזמנים לחתונה של
-          </h1>
-          <h2 className="text-4xl font-bold text-purple-800 text-center mb-12 font-mplus drop-shadow-sm">
-            {profile ? `${profile.fullName} ו${profile.partnerName}` : ''}
-          </h2>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">ניהול רשימת מוזמנים</h1>
+              <Button onClick={() => setIsAddingGuest(!isAddingGuest)}>
+                {isAddingGuest ? 'ביטול' : 'הוספת מוזמן חדש'}
+              </Button>
+            </div>
+            
+            {/* הצגת הודעה על מצב חיבור בין חשבונות */}
+            {user?.connectedUserId && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3 text-blue-800 text-sm">
+                <div className="font-medium mb-1">חשבון מחובר - נתונים משותפים</div>
+                <p>
+                  חשבון זה מחובר לחשבון של {user.partnerName || 'השותף/ה שלך'}.
+                  רשימת המוזמנים מסונכרנת בין שני החשבונות.
+                  {user.isMainEventOwner 
+                    ? ' אתה מוגדר כבעל החשבון הראשי.' 
+                    : ' השינויים שלך יופיעו גם בחשבון השותף.'}
+                </p>
+                <div className="flex flex-col mt-2">
+                  <button 
+                    onClick={handleForceRefresh}
+                    className="mb-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm transition-colors flex items-center justify-center"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                    </svg>
+                    סנכרן רשימת אורחים מלאה
+                  </button>
+                  <p className="text-xs text-blue-600">
+                    אם אתה לא רואה את כל האורחים או יש בעיות סנכרון, לחץ על כפתור הסנכרון לביצוע סנכרון מלא בין החשבונות.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
           
           {/* סיכום סטטיסטי */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-12">

@@ -69,6 +69,29 @@ const userSchema = new mongoose.Schema({
     enum: ['Male', 'Female', 'Other'],
     required: false,
   },
+  partnerInvitePending: {
+    type: Boolean,
+    default: false
+  },
+  partnerInviteAccepted: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Event Sharing
+  sharedEventId: {
+    type: String,
+    required: false
+  },
+  isMainEventOwner: {
+    type: Boolean,
+    default: false
+  },
+  connectedUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
+  },
   
   // Wedding Details
   weddingDate: {

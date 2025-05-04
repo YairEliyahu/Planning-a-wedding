@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 
 interface IGuestDocument extends mongoose.Document {
   userId: mongoose.Types.ObjectId;
+  sharedEventId?: string;
   name: string;
   phoneNumber?: string;
   numberOfGuests: number;
@@ -13,7 +14,7 @@ interface IGuestDocument extends mongoose.Document {
 }
 
 interface IGuestModel extends mongoose.Model<IGuestDocument> {
-  getOrganizedGuestList(userId: string): Promise<{
+  getOrganizedGuestList(userId: string, sharedGuests?: IGuestDocument[]): Promise<{
     userId: string;
     total: number;
     confirmed: number;
@@ -32,6 +33,11 @@ const guestSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true,
+    index: true
+  },
+  sharedEventId: {
+    type: String,
+    required: false,
     index: true
   },
   name: {
@@ -82,6 +88,7 @@ guestSchema.pre('save', function(next) {
 
 // Add compound index for better organization and query performance
 guestSchema.index({ userId: 1, side: 1, isConfirmed: 1 });
+guestSchema.index({ sharedEventId: 1, side: 1 }); // Add index for shared event queries
 
 // Virtual for total number of guests for this user
 guestSchema.virtual('totalGuests').get(function(this: IGuestDocument) {
@@ -89,8 +96,17 @@ guestSchema.virtual('totalGuests').get(function(this: IGuestDocument) {
 });
 
 // Static method to get guests organized by user
-guestSchema.statics.getOrganizedGuestList = async function(userId: string) {
-  const guests = await this.find({ userId }).sort({ side: 1, isConfirmed: -1, name: 1 });
+guestSchema.statics.getOrganizedGuestList = async function(userId: string, sharedGuests?: IGuestDocument[]) {
+  // Use provided guests (for shared events) or fetch guests just for this user
+  let guests;
+  
+  if (sharedGuests) {
+    // If shared guests were provided, use them directly
+    guests = sharedGuests;
+  } else {
+    // Otherwise look up by userId only
+    guests = await this.find({ userId }).sort({ side: 1, isConfirmed: -1, name: 1 });
+  }
   
   const organizedGuests = {
     userId,

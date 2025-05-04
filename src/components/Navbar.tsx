@@ -1,13 +1,20 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const Navbar = () => {
   const { user, logout, isAuthReady } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  
+  // אם אנחנו בדף הזמנה או רישום עם הזמנה - לא להציג את ה-navbar
+  const hideNavbarPaths = ['/accept-invitation', '/register-with-invitation'];
+  if (hideNavbarPaths.some(path => pathname?.includes(path))) {
+    return null;
+  }
 
   const handleLogout = () => {
     logout();

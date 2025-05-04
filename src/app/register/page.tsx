@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import LoadingSpinner from '../components/LoadingSpinner';
 
@@ -16,6 +16,16 @@ const RegisterPage = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  
+  // Check if there's an invitation token when the component loads
+  const [hasInvitation, setHasInvitation] = useState(false);
+  
+  useEffect(() => {
+    const invitationToken = localStorage.getItem('invitation_token');
+    if (invitationToken) {
+      setHasInvitation(true);
+    }
+  }, []);
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +68,13 @@ const RegisterPage = () => {
         }
       }
 
+      // Check if there's a stored invitation token
+      const invitationToken = localStorage.getItem('invitation_token');
+      
       // מעבירים לדף הבית או לדף השלמת הפרופיל
-      if (data.user?.isProfileComplete) {
+      if (invitationToken) {
+        router.push('/accept-invitation');
+      } else if (data.user?.isProfileComplete) {
         router.push('/');
       } else {
         router.push('/complete-profile');
@@ -75,6 +90,14 @@ const RegisterPage = () => {
   return (
     <div style={styles.container}>
       <h1>הרשמה</h1>
+      
+      {hasInvitation && (
+        <div style={styles.invitationMessage}>
+          <p>התקבלה הזמנה לשיתוף ניהול חשבון חתונה!</p>
+          <p>אנא השלם את ההרשמה כדי להצטרף לחשבון המשותף.</p>
+        </div>
+      )}
+      
       {error && <p style={styles.error}>{error}</p>}
       <form onSubmit={handleRegister} style={styles.form}>
         <input
@@ -181,6 +204,12 @@ const styles = {
   },
   error: {
     color: 'red',
+    marginBottom: '1rem',
+  },
+  invitationMessage: {
+    backgroundColor: '#d1fadf',
+    padding: '1rem',
+    borderRadius: '5px',
     marginBottom: '1rem',
   },
 };

@@ -13,6 +13,7 @@ interface UserProfile {
   weddingDate: string;
   partnerName: string;
   partnerPhone: string;
+  partnerEmail?: string;
   expectedGuests: string;
   budget: string;
   venueType: 'garden' | 'nature' | '';
@@ -27,6 +28,8 @@ interface UserProfile {
   };
   authProvider?: string;
   profilePicture?: string;
+  partnerInvitePending?: boolean;
+  partnerInviteAccepted?: boolean;
 }
 
 export default function EditProfilePage({ params }: { params: { id: string } }) {
@@ -39,6 +42,7 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
     weddingDate: '',
     partnerName: '',
     partnerPhone: '',
+    partnerEmail: '',
     expectedGuests: '',
     budget: '',
     venueType: '',
@@ -55,6 +59,8 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [inviteStatus, setInviteStatus] = useState<'idle' | 'sending' | 'sent' | 'expired' | 'accepted' | 'error'>('idle');
+  const [inviteMessage, setInviteMessage] = useState('');
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -109,6 +115,7 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
         weddingDate: formattedDate,
         partnerName: userData.partnerName || '',
         partnerPhone: userData.partnerPhone || '',
+        partnerEmail: userData.partnerEmail || '',
         expectedGuests: userData.expectedGuests || '',
         budget: userData.budget || '',
         venueType: userData.venueType || '',
@@ -122,6 +129,17 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
           design: Boolean(userData.preferences?.design)
         }
       });
+
+      // Set invitation status
+      if (userData.partnerInviteAccepted) {
+        setInviteStatus('accepted');
+        setInviteMessage(`${userData.partnerName || 'השותף/ה'} כבר מחובר/ת לחשבון`);
+      } else if (userData.partnerInvitePending) {
+        setInviteStatus('sent');
+        setInviteMessage(`הזמנה נשלחה ל-${userData.partnerEmail}`);
+      } else {
+        setInviteStatus('idle');
+      }
     } catch (err) {
       console.error('Error fetching user:', err);
       setError(err instanceof Error ? err.message : 'Failed to load profile');
@@ -177,6 +195,52 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
     } catch (err) {
       console.error('Update failed:', err);
       setError(err instanceof Error ? err.message : 'עדכון הפרופיל נכשל');
+    }
+  };
+
+  const handleInvitePartner = async () => {
+    if (!formData.partnerEmail) {
+      setError('אנא הזן את כתובת האימייל של בן/בת הזוג');
+      return;
+    }
+
+    setInviteStatus('sending');
+    setError('');
+    setSuccessMessage('');
+
+    try {
+      const response = await fetch('/api/invite-partner', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: params.id,
+          partnerEmail: formData.partnerEmail,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to send invitation');
+      }
+
+      setInviteStatus('sent');
+      setInviteMessage(`הזמנה נשלחה ל-${formData.partnerEmail}`);
+      setSuccessMessage('הזמנה נשלחה בהצלחה!');
+
+      // Update the user data after sending invitation
+      await fetchUserProfile();
+      
+      // הסרת ההודעה אחרי 3 שניות
+      setTimeout(() => {
+        setSuccessMessage('');
+      }, 3000);
+    } catch (err) {
+      console.error('Invitation failed:', err);
+      setInviteStatus('error');
+      setError(err instanceof Error ? err.message : 'שליחת ההזמנה נכשלה');
     }
   };
 
@@ -368,6 +432,66 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
                 />
               </div>
 
+              <div style={styles.partnerEmailContainer}>
+                <label style={styles.label}>אימייל בן/בת הזוג</label>
+                <div style={styles.partnerEmailWrapper}>
+                  <input
+                    type="email"
+                    name="partnerEmail"
+                    value={formData.partnerEmail}
+                    onChange={handleChange}
+                    style={{
+                      ...styles.input,
+                      borderTopRightRadius: '4px',
+                      borderBottomRightRadius: '4px',
+                      borderTopLeftRadius: '0',
+                      borderBottomLeftRadius: '0',
+                      borderRight: '1px solid #ddd',
+                      width: 'calc(100% - 150px)'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleInvitePartner}
+                    disabled={inviteStatus === 'sending' || inviteStatus === 'accepted' || !formData.partnerEmail}
+                    style={{
+                      padding: '0.75rem',
+                      borderRadius: '4px 0 0 4px',
+                      border: '1px solid',
+                      fontSize: '0.9rem',
+                      width: '150px',
+                      transition: 'all 0.3s ease',
+                      cursor: inviteStatus === 'sending' || inviteStatus === 'accepted' || !formData.partnerEmail ? 'not-allowed' : 'pointer',
+                      backgroundColor: 
+                        inviteStatus === 'accepted' ? '#4CAF50' :
+                        inviteStatus === 'sent' ? '#FFA500' : 
+                        inviteStatus === 'sending' ? '#cccccc' : 
+                        inviteStatus === 'error' ? '#f44336' : 
+                        '#0070f3',
+                      borderColor: 
+                        inviteStatus === 'accepted' ? '#388E3C' :
+                        inviteStatus === 'sent' ? '#FF8C00' : 
+                        inviteStatus === 'sending' ? '#bbbbbb' : 
+                        inviteStatus === 'error' ? '#D32F2F' : 
+                        '#0062cc',
+                      color: 'white',
+                    }}
+                  >
+                    {inviteStatus === 'accepted' ? '✓ מחובר' : 
+                     inviteStatus === 'sent' ? 'שלח שוב' : 
+                     inviteStatus === 'sending' ? '...שולח' : 
+                     inviteStatus === 'error' ? 'נסה שוב' : 
+                     'שלח הזמנה'}
+                  </button>
+                </div>
+                {inviteStatus === 'sent' && (
+                  <p style={styles.inviteMessage}>{inviteMessage}</p>
+                )}
+                {inviteStatus === 'accepted' && (
+                  <p style={styles.inviteMessageSuccess}>{inviteMessage}</p>
+                )}
+              </div>
+
               <div style={styles.fieldContainer}>
                 <label style={styles.label}>מספר אורחים משוער</label>
                 <input
@@ -465,6 +589,13 @@ const styles = {
   fieldContainer: {
     marginBottom: '1rem',
   },
+  partnerEmailContainer: {
+    marginBottom: '1rem',
+  },
+  partnerEmailWrapper: {
+    display: 'flex',
+    flexDirection: 'row' as const,
+  },
   label: {
     display: 'block',
     fontSize: '0.9rem',
@@ -530,6 +661,16 @@ const styles = {
     borderRadius: '4px',
     marginBottom: '1rem',
     textAlign: 'center' as const,
+  },
+  inviteMessage: {
+    fontSize: '0.8rem',
+    color: '#FF8C00',
+    marginTop: '0.5rem',
+  },
+  inviteMessageSuccess: {
+    fontSize: '0.8rem',
+    color: '#388E3C',
+    marginTop: '0.5rem',
   },
   loadingSpinner: {
     textAlign: 'center' as const,

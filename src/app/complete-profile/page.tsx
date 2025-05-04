@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import Image from 'next/image';
 import Navbar from '@/components/Navbar';
@@ -13,7 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import LoadingSpinner from '../components/LoadingSpinner';
 
-interface User {
+export interface User {
   _id: string;
   fullName: string;
   email: string;
@@ -52,6 +52,8 @@ interface User {
   
   isProfileComplete?: boolean;
   authProvider?: string;
+  partnerInvitePending?: boolean;
+  partnerInviteAccepted?: boolean;
 }
 
 interface FormData {
@@ -95,7 +97,6 @@ interface FormData {
 export default function CompleteProfile() {
   const { user, login } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [isInitializing, setIsInitializing] = useState(true);
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState<FormData>({
@@ -133,6 +134,8 @@ export default function CompleteProfile() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [inviteStatus, setInviteStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
+  const [inviteMessage, setInviteMessage] = useState('');
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -172,6 +175,15 @@ export default function CompleteProfile() {
             timeOfDay: data.user.timeOfDay || '',
             locationPreference: data.user.locationPreference || ''
           }));
+          
+          // Set invitation status if available
+          if (data.user.partnerInvitePending) {
+            setInviteStatus('sent');
+            setInviteMessage(`הזמנה נשלחה ל-${data.user.partnerEmail}`);
+          } else if (data.user.partnerInviteAccepted) {
+            setInviteStatus('sent');
+            setInviteMessage(`${data.user.partnerName || 'השותף/ה'} כבר מחובר/ת לחשבון`);
+          }
         }
       } catch (error) {
         setError('שגיאה בטעינת נתוני המשתמש');
@@ -263,6 +275,43 @@ export default function CompleteProfile() {
 
   const prevStep = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1));
+  };
+
+  const handleInvitePartner = async () => {
+    if (!formData.partnerEmail) {
+      setError('נא להזין את האימייל של בן/בת הזוג');
+      return;
+    }
+    
+    setInviteStatus('sending');
+    setError('');
+    
+    try {
+      const response = await fetch('/api/invite-partner', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: user?._id,
+          partnerEmail: formData.partnerEmail,
+          partnerName: formData.partnerName,
+        }),
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'שגיאה בשליחת ההזמנה');
+      }
+      
+      setInviteStatus('sent');
+      setInviteMessage(`הזמנה נשלחה ל-${formData.partnerEmail}`);
+      
+    } catch (error) {
+      setInviteStatus('error');
+      setError(error instanceof Error ? error.message : 'שגיאה בשליחת ההזמנה');
+    }
   };
 
   if (isInitializing || isLoading) {
@@ -384,14 +433,29 @@ export default function CompleteProfile() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="partnerEmail">אימייל</Label>
-                <Input
-                  id="partnerEmail"
-                  name="partnerEmail"
-                  type="email"
-                  value={formData.partnerEmail}
-                  onChange={handleChange}
-                  required
-                />
+                <div className="flex gap-2">
+                  <Input
+                    id="partnerEmail"
+                    name="partnerEmail"
+                    type="email"
+                    value={formData.partnerEmail}
+                    onChange={handleChange}
+                    required
+                  />
+                  <Button 
+                    type="button" 
+                    onClick={handleInvitePartner} 
+                    disabled={inviteStatus === 'sending' || inviteStatus === 'sent' || !formData.partnerEmail}
+                    className="whitespace-nowrap"
+                  >
+                    {inviteStatus === 'sending' ? 'שולח...' : 'הזמן לשיתוף'}
+                  </Button>
+                </div>
+                {inviteStatus === 'sent' && (
+                  <div className="mt-2 text-sm text-green-600">
+                    {inviteMessage}
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="partnerPhone">טלפון</Label>
@@ -429,6 +493,19 @@ export default function CompleteProfile() {
                   <option value="Female">נקבה</option>
                   <option value="Other">אחר</option>
                 </select>
+              </div>
+              
+              <div className="mt-4 p-4 bg-blue-50 rounded-md">
+                <h3 className="font-medium text-blue-800 mb-2">גישה משותפת לחשבון</h3>
+                <p className="text-sm text-blue-700 mb-2">
+                  הזמנת בן/בת הזוג תאפשר גישה משותפת לחשבון זה.
+                  {inviteStatus !== 'sent' && ' הקליקו על \'הזמן לשיתוף\' לאחר הזנת האימייל.'}
+                </p>
+                {inviteStatus === 'sent' && (
+                  <p className="text-sm text-blue-700">
+                    בן/בת הזוג יקבלו מייל עם הוראות לכניסה לחשבון. אם אין להם חשבון קיים, הם יתבקשו להירשם תחילה.
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -541,10 +618,15 @@ export default function CompleteProfile() {
                         id={key}
                         name={`preferences.${key}`}
                         checked={value}
-                        onCheckedChange={(checked) => 
+                        onCheckedChange={(isChecked) => {
+                          const checked = !!isChecked;
                           handleChange({
-                            target: { name: `preferences.${key}`, checked }
-                          } as React.ChangeEvent<HTMLInputElement>)
+                            target: { 
+                              name: `preferences.${key}`, 
+                              checked 
+                            }
+                          } as React.ChangeEvent<HTMLInputElement>);
+                        }}
                       />
                       <Label htmlFor={key} className="mr-2">
                         {key === 'venue' && 'אולם אירועים'}

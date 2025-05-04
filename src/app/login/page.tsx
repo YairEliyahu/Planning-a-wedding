@@ -96,7 +96,16 @@ export default function LoginPage() {
       if (!response.ok) throw new Error(data.message);
 
       await login(data.token, data.user);
-      router.push(`/user/${data.user._id}`);
+      
+      // Check if there's a stored invitation token
+      const invitationToken = localStorage.getItem('invitation_token');
+      const returnUrl = searchParams.get('returnUrl');
+      
+      if (invitationToken && returnUrl === '/accept-invitation') {
+        router.push('/accept-invitation');
+      } else {
+        router.push(`/user/${data.user._id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'שגיאה בהתחברות');
     } finally {

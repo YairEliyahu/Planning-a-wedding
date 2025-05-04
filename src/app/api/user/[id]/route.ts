@@ -1,29 +1,109 @@
 import { NextResponse } from 'next/server';
-import connectToDatabase from '@/utils/dbConnect';
-import User from '@/models/User';
+import connectDB from '../../../../lib/db';
+import User from '../../../../models/User';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+
+// Define a type for the user document
+interface UserDocument {
+  _id: mongoose.Types.ObjectId;
+  email: string;
+  fullName: string;
+  isProfileComplete: boolean;
+  phone?: string;
+  weddingDate?: Date;
+  partnerName?: string;
+  partnerPhone?: string;
+  partnerEmail?: string;
+  expectedGuests?: string;
+  weddingLocation?: string;
+  budget?: string;
+  preferences?: {
+    venue: boolean;
+    catering: boolean;
+    photography: boolean;
+    music: boolean;
+    design: boolean;
+  };
+  updatedAt: Date;
+}
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    await connectToDatabase();
-    const user = await User.findById(params.id).select('-password');
-    
+    await connectDB();
+    const userId = params.id;
+    const user = await User.findById(userId);
+
     if (!user) {
       return NextResponse.json(
-        { success: false, message: 'User not found' },
+        { message: 'User not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true, user });
+    return NextResponse.json({ user });
   } catch (error) {
-    console.error('Error fetching user:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { message: 'Failed to fetch user', error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await connectDB();
+    const userId = params.id;
+    const userData = await request.json();
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return NextResponse.json(
+        { message: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    // Update the user fields
+    Object.assign(user, userData);
+    await user.save();
+    
+    // If this user is connected to someone else, sync necessary data
+    if (user.connectedUserId) {
+      const connectedUser = await User.findById(user.connectedUserId);
+      
+      if (connectedUser) {
+        // השדות המשותפים שצריכים להיות מסונכרנים
+        const syncFields = [
+          'weddingDate', 'expectedGuests', 'weddingLocation', 'budget', 
+          'preferences', 'venueType', 'timeOfDay', 'locationPreference'
+        ];
+        
+        // העתקת השדות המשותפים
+        syncFields.forEach(field => {
+          if (field in userData) {
+            connectedUser[field] = user[field];
+          }
+        });
+        
+        await connectedUser.save();
+      }
+    }
+
+    return NextResponse.json({ 
+      message: 'User updated successfully',
+      user
+    });
+  } catch (error) {
+    return NextResponse.json(
+      { message: 'Failed to update user', error: (error as Error).message },
       { status: 500 }
     );
   }
@@ -35,7 +115,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    await connectToDatabase();
+    await connectDB();
 
     // עידוא שה-ID תקין
     if (!params.id || !mongoose.Types.ObjectId.isValid(params.id)) {
@@ -79,6 +159,7 @@ export async function PATCH(
           weddingDate: processedData.weddingDate,
           partnerName: processedData.partnerName,
           partnerPhone: processedData.partnerPhone,
+          partnerEmail: processedData.partnerEmail,
           expectedGuests: processedData.expectedGuests,
           weddingLocation: processedData.weddingLocation,
           budget: processedData.budget,
@@ -91,7 +172,7 @@ export async function PATCH(
         new: true,
         runValidators: true
       }
-    ).select('-password').lean();
+    ).select('-password').lean() as unknown as UserDocument;
 
     if (!updatedUser) {
       return NextResponse.json(

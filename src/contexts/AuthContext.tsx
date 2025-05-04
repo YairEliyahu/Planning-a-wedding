@@ -28,6 +28,11 @@ export interface User {
     design: boolean;
   };
   isProfileComplete?: boolean;
+  sharedEventId?: string;
+  connectedUserId?: string;
+  isMainEventOwner?: boolean;
+  partnerInvitePending?: boolean;
+  partnerInviteAccepted?: boolean;
 }
 
 interface AuthContextType {
