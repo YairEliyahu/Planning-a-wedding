@@ -247,7 +247,7 @@ const styles = {
   },
   footerText: {
     fontSize: '1.1rem',
-    color: '#666',
+    color: '#667',
   },
   footerLink: {
     color: '#ff4081',

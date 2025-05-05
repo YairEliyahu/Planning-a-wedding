@@ -627,7 +627,7 @@ const styles = {
   },
   filterLabel: {
     fontWeight: '600',
-    color: '#333',
+    color: '#334',
   },
   filterSelect: {
     padding: '0.5rem 1rem',
