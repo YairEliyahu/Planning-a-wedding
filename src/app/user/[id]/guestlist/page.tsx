@@ -8,6 +8,7 @@ import Head from 'next/head';
 import * as XLSX from 'xlsx';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
+import { motion } from 'framer-motion';
 
 interface Guest {
   _id: string;
@@ -1389,6 +1390,12 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
           
           .animate-fade-in {
             animation: fadeIn 0.3s ease-out forwards;
+          }
+        `}</style>
+        {/* הוספת style לאנימציית הספינר */}
+        <style jsx global>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
           }
         `}</style>
       </Head>

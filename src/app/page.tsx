@@ -333,6 +333,25 @@ const styles = {
   },
 };
 
+// הגדרת סגנון גלובלי לאנימציית הספינר
+const globalStyles = `
+  @keyframes loaderSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .loader {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: loaderSpin 0.8s linear infinite;
+    display: inline-block;
+    margin-right: 8px;
+  }
+`;
+
 export default function HomePage() {
   const { login, user } = useAuth();
   const searchParams = useSearchParams();
@@ -680,10 +699,12 @@ export default function HomePage() {
         errorMessage: ''
       });
       
-      // הצגת הודעת הצלחה למשך 3 שניות
+      // הצגת הודעת הצלחה למשך 2 שניות ואז העברה לסקשן הראשון
       setTimeout(() => {
         setFormStatus(prev => ({ ...prev, isSuccess: false }));
-      }, 3000);
+        // מעבר לסקשן הראשון
+        setActiveSection(0);
+      }, 2000);
       
     } catch (error) {
       setFormStatus({
@@ -1145,11 +1166,18 @@ export default function HomePage() {
                 
                 <motion.button 
                   type="submit" 
-                  style={styles.submitButton}
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
+                  style={{
+                    ...styles.submitButton,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.5rem'
+                  }}
+                  whileHover={{ scale: formStatus.isSubmitting ? 1 : 1.05 }}
+                  whileTap={{ scale: formStatus.isSubmitting ? 1 : 0.95 }}
                   disabled={formStatus.isSubmitting}
                 >
+                  {formStatus.isSubmitting && <div className="loader"></div>}
                   {formStatus.isSubmitting ? 'שולח...' : 'שלח הודעה'}
                 </motion.button>
               </form>
@@ -1157,6 +1185,8 @@ export default function HomePage() {
           </section>
         </motion.div>
       </div>
+      {/* הוספת סגנון גלובלי */}
+      <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
     </div>
   );
 }
