@@ -108,9 +108,57 @@ const dummyVendors = {
     { id: 30, name: 'החצר האחורית', location: 'מושב אורה', area: 'ירושלים', price: '₪₪₪', image: '/images/venues/ahazerAahorit.jpg', imageSource: 'אתר המקום', website: 'https://www.thebackyard.co.il/' },
   ],
   photographers: [
-    { id: 1, name: 'אלון הצלם', location: 'ארצי', area: 'ארצי', price: '₪₪₪', image: '/images/dummy/photographer1.jpg' },
-    { id: 2, name: 'סטודיו רגעים', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/dummy/photographer2.jpg' },
-    { id: 3, name: 'צילום חתונות HD', location: 'אזור הצפון', area: 'צפון', price: '₪₪', image: '/images/dummy/photographer3.jpg' },
+    { 
+      id: 1, 
+      name: 'סלקט מגנטים', 
+      location: 'ארצי', 
+      area: 'ארצי', 
+      price: '₪₪₪', 
+      image: '/images/photographers/select.png', 
+      website: 'https://smagnetim.co.il/',
+      phone: '050-1234567',
+      averagePrice: '₪8,000',
+      popularity: '⭐⭐⭐⭐⭐',
+      availability: 'זמין ל-2024'
+    },
+    { 
+      id: 2, 
+      name: 'מגנטלי', 
+      location: 'אזור המרכז', 
+      area: 'מרכז', 
+      price: '₪₪₪₪', 
+      image: '/images/photographers/magnetli.png', 
+      website: 'https://magnetli.co.il/',
+      phone: '050-2345678',
+      averagePrice: '₪10,000',
+      popularity: '⭐⭐⭐⭐',
+      availability: 'זמין ל-2024'
+    },
+    { 
+      id: 3, 
+      name: 'דוקטור מגנט', 
+      location: 'אזור הצפון', 
+      area: 'צפון', 
+      price: '₪₪', 
+      image: '/images/photographers/doctor.jpg', 
+      website: 'https://drmagnet.co.il/',
+      phone: '050-3456789',
+      averagePrice: '₪6,000',
+      popularity: '⭐⭐⭐',
+      availability: 'זמין ל-2024'
+    },
+    { id: 4, name: 'יויו מגנט', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '/images/photographers/yoyo.jpg', website: 'https://yoyomagnet.com/' },
+    { id: 5, name: 'אושרי צילום', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '/images/photographers/oshri.jpg', website: 'https://oshri-photo.co.il/' },
+    { id: 6, name: 'אדם שמשי', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/photographers/adam.jpg', website: '' },
+    { id: 7, name: 'סברס צלמים', location: 'אזור הדרום', area: 'דרום', price: '₪₪₪', image: '/images/photographers/sabres.jpg', website: 'https://www.sabres.photography/' },
+    { id: 8, name: 'Unique Photography', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/photographers/unique.jpg', website: '' },
+    { id: 9, name: 'Daniel Notcake', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '/images/photographers/daniel.jpg', website: 'https://en.danielnotcake.com/' },
+    { id: 10, name: 'אלכס מלינסקי', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '/images/photographers/alex.jpg', website: '' },
+    { id: 11, name: 'אור גליקמן', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪', image: '/images/photographers/or.jpg', website: 'https://www.orglickman.com/' },
+    { id: 12, name: 'תום סיימון', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/photographers/tom.jpg', website: 'http://tomsaimon.com/' },
+    { id: 13, name: 'דימה וזינוביץ', location: 'אזור הדרום', area: 'דרום', price: '₪₪₪', image: '/images/photographers/dima.jpg', website: 'https://www.dvwed.com/' },
+    { id: 14, name: 'צחי שמש', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/photographers/zahi.png', website: 'https://www.tzahishemesh.com/' },
+    { id: 15, name: 'אספוסה ', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '/images/photographers/esposa.jpg', website: 'https://www.esposa.co.il/' }
   ],
   catering: [
     { id: 1, name: 'שף ארז', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '/images/dummy/catering1.jpg' },
@@ -153,6 +201,10 @@ interface Vendor {
   area: string;
   imageSource?: string;
   website?: string;
+  phone?: string;
+  averagePrice?: string;
+  popularity?: string;
+  availability?: string;
 }
 
 interface Params {
@@ -171,7 +223,8 @@ export default function CategoryPage({ params }: Params) {
   const [priceFilter, setPriceFilter] = useState<string>("");
   const [sortOption, setSortOption] = useState<string>("popularity");
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const vendorsPerPage = 15;
+  const vendorsPerPage = 10;
+  const [activeTooltip, setActiveTooltip] = useState<number | null>(null);
 
   // מוצא את הקטגוריה הנוכחית לפי המזהה
   useEffect(() => {
@@ -358,9 +411,38 @@ export default function CategoryPage({ params }: Params) {
               </div>
             </div>
             <div style={styles.vendorActions}>
-              <button style={styles.viewDetailsButton}>
-                <i className="fas fa-info-circle"></i> פרטים נוספים
-              </button>
+              <div style={styles.tooltipContainer}>
+                <button 
+                  style={styles.viewDetailsButton}
+                  onMouseEnter={() => setActiveTooltip(vendor.id)}
+                  onMouseLeave={() => setActiveTooltip(null)}
+                >
+                  <i className="fas fa-info-circle"></i> פרטים נוספים
+                </button>
+                <div style={{
+                  ...styles.tooltip,
+                  ...(activeTooltip === vendor.id ? styles.tooltipVisible : {})
+                }}>
+                  <div style={styles.tooltipContent}>
+                    <div style={styles.tooltipItem}>
+                      <i className="fas fa-phone" style={{...styles.tooltipIcon, color: currentCategory?.iconColor}}></i>
+                      <span>טלפון: {vendor.phone || 'לא זמין'}</span>
+                    </div>
+                    <div style={styles.tooltipItem}>
+                      <i className="fas fa-shekel-sign" style={{...styles.tooltipIcon, color: currentCategory?.iconColor}}></i>
+                      <span>מחיר ממוצע: {vendor.averagePrice || 'לא זמין'}</span>
+                    </div>
+                    <div style={styles.tooltipItem}>
+                      <i className="fas fa-star" style={{...styles.tooltipIcon, color: currentCategory?.iconColor}}></i>
+                      <span>פופולריות: {vendor.popularity || 'לא זמין'}</span>
+                    </div>
+                    <div style={styles.tooltipItem}>
+                      <i className="fas fa-calendar" style={{...styles.tooltipIcon, color: currentCategory?.iconColor}}></i>
+                      <span>זמינות: {vendor.availability || 'לא זמין'}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
               <button style={{...styles.contactVendorButton, backgroundColor: currentCategory.iconColor}}>
                 <i className="fas fa-phone-alt"></i> יצירת קשר
               </button>
@@ -602,8 +684,46 @@ const styles = {
     borderTop: '1px solid #eee',
     gap: '0.5rem',
   },
-  viewDetailsButton: {
+  tooltipContainer: {
+    position: 'relative' as const,
     flex: 1,
+  },
+  tooltip: {
+    position: 'absolute' as const,
+    bottom: '100%',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    backgroundColor: 'white',
+    padding: '1rem',
+    borderRadius: '8px',
+    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+    width: '250px',
+    marginBottom: '10px',
+    zIndex: 1000,
+    opacity: 0,
+    visibility: 'hidden' as const,
+    transition: 'all 0.3s ease',
+  },
+  tooltipVisible: {
+    opacity: 1,
+    visibility: 'visible' as const,
+  },
+  tooltipContent: {
+    fontSize: '0.9rem',
+    color: '#333',
+  },
+  tooltipItem: {
+    margin: '0.5rem 0',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  tooltipIcon: {
+    width: '20px',
+    color: '#666',
+  },
+  viewDetailsButton: {
+    width: '100%',
     padding: '0.6rem',
     backgroundColor: '#f5f5f5',
     color: '#333',
@@ -618,6 +738,10 @@ const styles = {
     transition: 'all 0.3s ease',
     ':hover': {
       backgroundColor: '#e0e0e0',
+      '& + div': {
+        visibility: 'visible',
+        opacity: 1,
+      }
     }
   },
   contactVendorButton: {
