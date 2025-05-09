@@ -61,18 +61,11 @@ const Navbar = () => {
               דף הבית
             </Link>
             <Link 
-              href="/#section-services" 
+              href="/services" 
               style={styles.link}
               onClick={(e) => {
                 e.preventDefault();
-                if (window.location.pathname === '/') {
-                  const event = new CustomEvent('navigate-section', { 
-                    detail: { section: 1 } 
-                  });
-                  window.dispatchEvent(event);
-                } else {
-                  router.push('/#section-services');
-                }
+                router.push('/services');
               }}
             >
               ספקים
