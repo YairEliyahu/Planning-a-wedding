@@ -125,59 +125,63 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.formCard}>
-        <h1 style={styles.title}>התחברות</h1>
+    <div className="min-h-screen bg-gradient-to-b from-pink-50 to-white flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-lg shadow-lg p-8">
+        <h1 className="text-3xl font-bold text-center mb-6" style={{ color: '#FD5890' }}>התחברות</h1>
         
-        {error && <div style={styles.error}>{error}</div>}
+        {error && <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4 text-center">{error}</div>}
         
         {isGoogleLoading && (
-          <LoadingSpinner text={loadingMessage} />
+          <LoadingSpinner text={loadingMessage} color="pink" />
         )}
 
-        <form onSubmit={handleSubmit} style={styles.form}>
-          <div style={styles.inputGroup}>
-            <label htmlFor="email" style={styles.label}>אימייל</label>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">אימייל</label>
             <input
               type="email"
               id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              style={styles.input}
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 text-right"
+              dir="rtl"
               required
             />
           </div>
 
-          <div style={styles.inputGroup}>
-            <label htmlFor="password" style={styles.label}>סיסמה</label>
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">סיסמה</label>
             <input
               type="password"
               id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              style={styles.input}
+              className="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-400 text-right"
+              dir="rtl"
               required
             />
           </div>
 
           <button 
             type="submit" 
-            style={styles.button}
+            className="w-full p-3 bg-pink-500 hover:bg-pink-600 text-white font-bold rounded-md transition-colors duration-200 disabled:opacity-70"
             disabled={isLoading || isGoogleLoading}
           >
             {isLoading ? 'מתחבר...' : 'התחבר'}
           </button>
         </form>
 
-        {isLoading && <LoadingSpinner text="מתחבר..." />}
+        {isLoading && <LoadingSpinner text="מתחבר..." color="pink" />}
 
-        <div style={styles.divider}>
-          <span style={styles.dividerText}>או</span>
+        <div className="relative flex items-center my-6">
+          <div className="flex-grow border-t border-gray-300"></div>
+          <span className="mx-4 text-gray-500 text-sm">או</span>
+          <div className="flex-grow border-t border-gray-300"></div>
         </div>
 
         <button 
           onClick={handleGoogleLogin} 
-          style={{ ...styles.socialButton, ...styles.googleButton }}
+          className="w-full p-3 border border-gray-300 bg-white text-gray-700 font-medium rounded-md mb-3 transition-colors duration-200 hover:bg-gray-50 flex justify-center items-center"
           disabled={isLoading || isGoogleLoading}
         >
           {isGoogleLoading ? 'מתחבר לגוגל...' : 'התחבר עם Google'}
@@ -185,15 +189,15 @@ export default function LoginPage() {
 
         <button 
           onClick={handleFacebookLogin} 
-          style={{ ...styles.socialButton, ...styles.facebookButton }}
+          className="w-full p-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition-colors duration-200 flex justify-center items-center"
           disabled={isLoading || isGoogleLoading}
         >
           התחבר עם Facebook
         </button>
 
-        <p style={styles.registerText}>
+        <p className="text-center text-sm text-gray-600 mt-6">
           עדיין אין לך חשבון?{' '}
-          <Link href="/register" style={styles.registerLink}>
+          <Link href="/register" className="text-pink-500 font-medium hover:text-pink-600">
             הירשם עכשיו
           </Link>
         </p>
@@ -201,114 +205,3 @@ export default function LoginPage() {
     </div>
   );
 }
-
-const styles = {
-  container: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#f7fafc',
-    padding: '20px',
-  },
-  formCard: {
-    backgroundColor: '#fff',
-    borderRadius: '10px',
-    padding: '40px',
-    width: '100%',
-    maxWidth: '450px',
-    boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-  },
-  title: {
-    fontSize: '1.875rem',
-    fontWeight: 'bold',
-    color: '#4a5568',
-    marginBottom: '1.5rem',
-    textAlign: 'center' as const,
-  },
-  form: {
-    marginBottom: '1.5rem',
-  },
-  inputGroup: {
-    marginBottom: '1rem',
-  },
-  label: {
-    display: 'block',
-    marginBottom: '0.5rem',
-    fontSize: '0.875rem',
-    fontWeight: '500',
-    color: '#4a5568',
-  },
-  input: {
-    width: '100%',
-    padding: '0.75rem',
-    border: '1px solid #e2e8f0',
-    borderRadius: '0.375rem',
-    fontSize: '1rem',
-    transition: 'border-color 0.15s ease-in-out',
-  },
-  button: {
-    width: '100%',
-    padding: '0.75rem',
-    backgroundColor: '#4299e1',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '0.375rem',
-    fontSize: '1rem',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'background-color 0.15s ease-in-out',
-  },
-  divider: {
-    display: 'flex',
-    alignItems: 'center',
-    margin: '1.5rem 0',
-  },
-  dividerText: {
-    margin: '0 1rem',
-    color: '#a0aec0',
-    fontSize: '0.875rem',
-  },
-  socialButton: {
-    width: '100%',
-    padding: '0.75rem',
-    border: 'none',
-    borderRadius: '0.375rem',
-    fontSize: '1rem',
-    fontWeight: '500',
-    cursor: 'pointer',
-    marginBottom: '1rem',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  googleButton: {
-    backgroundColor: '#fff',
-    color: '#4a5568',
-    border: '1px solid #e2e8f0',
-  },
-  facebookButton: {
-    backgroundColor: '#4267B2',
-    color: '#fff',
-  },
-  registerText: {
-    textAlign: 'center' as const,
-    fontSize: '0.875rem',
-    color: '#4a5568',
-    marginTop: '1.5rem',
-  },
-  registerLink: {
-    color: '#4299e1',
-    fontWeight: '500',
-    textDecoration: 'none',
-  },
-  error: {
-    backgroundColor: '#FEE2E2',
-    color: '#B91C1C',
-    padding: '0.75rem',
-    borderRadius: '0.375rem',
-    marginBottom: '1.5rem',
-    fontSize: '0.875rem',
-    textAlign: 'center' as const,
-  }
-};
