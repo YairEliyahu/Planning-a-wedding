@@ -45,15 +45,12 @@ export default function LoginPage() {
       // התחלת אנימציית התקדמות
       setLoadingMessage('מתחבר לשירותי גוגל...');
       
-      // שלבי תהליך עם הודעות מתאימות
+      // שלבי תהליך עם הודעות מתאימות - מצומצם ומהיר יותר
       const stages = [
         { time: 1000, message: 'מאמת פרטים...' },
         { time: 3000, message: 'מתחבר למסד הנתונים...' },
-        { time: 6000, message: 'מחפש חשבון משתמש...' },
-        { time: 10000, message: 'מכין נתוני התחברות...' },
-        { time: 15000, message: 'מכין את האפליקציה...' },
-        { time: 20000, message: 'כמעט שם...' },
-        { time: 30000, message: 'ממתין לסיום ההתחברות...' }
+        { time: 5000, message: 'מחפש חשבון משתמש...' },
+        { time: 8000, message: 'ממתין לתשובה מגוגל...' }
       ];
       
       // הגדרת התקדמות עבור כל שלב
@@ -65,19 +62,35 @@ export default function LoginPage() {
         }, stage.time);
       });
       
-      // טיימר אבטחה - אם לא הסתיים תוך 40 שניות, בטל
+      // טיימר אבטחה - הקטנת זמן ההמתנה ל-15 שניות במקום 40
       timer = setTimeout(() => {
         if (isGoogleLoading) {
           setIsGoogleLoading(false);
           setError('ההתחברות לקחה יותר מדי זמן. נסה שנית.');
         }
-      }, 40000);
+      }, 15000);
     }
     
     return () => {
       if (timer) clearTimeout(timer);
     };
   }, [isGoogleLoading]);
+
+  // בדיקת זמן התחברות ארוך מדי עם גוגל
+  useEffect(() => {
+    const authStarted = localStorage.getItem('google_auth_started');
+    
+    if (authStarted) {
+      const startTime = parseInt(authStarted);
+      const elapsedTime = Date.now() - startTime;
+      
+      // אם עברו יותר מ-30 שניות מאז שהתחלנו את תהליך האימות, נקה את המצב
+      if (elapsedTime > 30000) {
+        setIsGoogleLoading(false);
+        localStorage.removeItem('google_auth_started');
+      }
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,9 +127,16 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
-    setIsGoogleLoading(true);
+    // איפוס הודעות שגיאה
     setError('');
-    // הניווט מתבצע במקביל להצגת מחוון ההתקדמות
+    
+    // אחסון ברירת מחדל עבור חזרה מגוגל
+    localStorage.setItem('google_auth_started', Date.now().toString());
+    
+    // הגדרת עמוד לוגין
+    setIsGoogleLoading(true);
+    
+    // העברה מידית לדף גוגל
     window.location.href = '/api/auth/google';
   };
 
