@@ -76,142 +76,36 @@ const serviceCategories = [
 // דוגמאות לספקים (יש למלא בספקים אמיתיים בהמשך)
 const dummyVendors = {
   venues: [
-    // אזור המרכז
-    { 
-      id: 1, 
-      name: 'LAGO', 
-      location: 'ראשון לציון', 
-      area: 'מרכז', 
-      price: '₪₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: 'https://www.lago-events.co.il/'
-    },
-    { 
-      id: 2, 
-      name: 'האחוזה מודיעין', 
-      location: 'מודיעין', 
-      area: 'מרכז', 
-      price: '₪₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    { 
-      id: 3, 
-      name: 'EAST', 
-      location: 'תל אביב', 
-      area: 'מרכז', 
-      price: '₪₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    { 
-      id: 4, 
-      name: 'ריברסייד', 
-      location: 'תל אביב', 
-      area: 'מרכז', 
-      price: '₪₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    { 
-      id: 5, 
-      name: 'טרויה', 
-      location: 'ראשון לציון', 
-      area: 'מרכז', 
-      price: '₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    { 
-      id: 6, 
-      name: 'שבע', 
-      location: 'תל אביב', 
-      area: 'מרכז', 
-      price: '₪₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    
-    // אזור השרון
-    { 
-      id: 7, 
-      name: 'קיסר ים', 
-      location: 'קיסריה', 
-      area: 'שרון', 
-      price: '₪₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    { 
-      id: 8, 
-      name: 'הגלריה', 
-      location: 'כפר ויתקין', 
-      area: 'שרון', 
-      price: '₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    { 
-      id: 9, 
-      name: 'גן ורדים', 
-      location: 'אבן יהודה', 
-      area: 'שרון', 
-      price: '₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    
-    // אזור הצפון
-    { 
-      id: 13, 
-      name: 'גני כנען', 
-      location: 'חיפה', 
-      area: 'צפון', 
-      price: '₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    { 
-      id: 14, 
-      name: 'ביער', 
-      location: 'חדרה', 
-      area: 'צפון', 
-      price: '₪₪₪', 
-      image: '',
-      imageSource: 'אתר המקום',
-      website: ''
-    },
-    
-    // שאר הספקים נשארים כפי שהם
-    { id: 10, name: 'עלמה', location: 'תל מונד', area: 'שרון', price: '₪₪₪', image: '/images/dummy/venue1.jpg' },
-    { id: 11, name: 'Q גן אירועים', location: 'גליל ים', area: 'שרון', price: '₪₪₪₪', image: '/images/dummy/venue2.jpg' },
-    { id: 12, name: 'אגדתא', location: 'בארותיים', area: 'שרון', price: '₪₪₪', image: '/images/dummy/venue3.jpg' },
-    { id: 15, name: 'קסיופיאה', location: 'הרצליה (חוף ים)', area: 'צפון', price: '₪₪₪₪', image: '/images/dummy/venue3.jpg' },
-    { id: 16, name: 'אמארה', location: 'עפולה', area: 'צפון', price: '₪₪₪', image: '/images/dummy/venue1.jpg' },
-    { id: 17, name: 'טופ דוראן', location: 'צומת כפר קרע', area: 'צפון', price: '₪₪₪', image: '/images/dummy/venue2.jpg' },
-    { id: 18, name: 'שמיים וארץ', location: 'כרמל', area: 'צפון', price: '₪₪₪₪', image: '/images/dummy/venue3.jpg' },
-    { id: 19, name: 'חוות רונית', location: 'אזור הרי יהודה', area: 'דרום', price: '₪₪₪', image: '/images/dummy/venue1.jpg' },
-    { id: 20, name: 'נסיה', location: 'באר שבע', area: 'דרום', price: '₪₪', image: '/images/dummy/venue2.jpg' },
-    { id: 21, name: 'בית על הים', location: 'אשקלון', area: 'דרום', price: '₪₪₪', image: '/images/dummy/venue3.jpg' },
-    { id: 22, name: 'אלמה', location: 'נתיבות', area: 'דרום', price: '₪₪', image: '/images/dummy/venue1.jpg' },
-    { id: 23, name: 'חצר המלכה', location: 'קריית מלאכי', area: 'דרום', price: '₪₪', image: '/images/dummy/venue2.jpg' },
-    { id: 24, name: 'אחוזת טל', location: 'אשדוד', area: 'דרום', price: '₪₪₪', image: '/images/dummy/venue3.jpg' },
-    { id: 25, name: 'עין יעל', location: 'גן ארכיאולוגי פתוח', area: 'ירושלים', price: '₪₪₪', image: '/images/dummy/venue1.jpg' },
-    { id: 26, name: 'קדם', location: 'מעלה החמישה', area: 'ירושלים', price: '₪₪₪', image: '/images/dummy/venue2.jpg' },
-    { id: 27, name: 'ברכה בגנים', location: 'מבשרת ציון', area: 'ירושלים', price: '₪₪₪', image: '/images/dummy/venue3.jpg' },
-    { id: 28, name: 'ויה', location: 'ירושלים', area: 'ירושלים', price: '₪₪₪₪', image: '/images/dummy/venue1.jpg' },
-    { id: 29, name: 'אולם הנסיכה', location: 'אזור תעשייה תלפיות', area: 'ירושלים', price: '₪₪₪', image: '/images/dummy/venue2.jpg' },
-    { id: 30, name: 'החצר האחורית', location: 'מושב אורה', area: 'ירושלים', price: '₪₪₪', image: '/images/dummy/venue3.jpg' },
+    { id: 1, name: 'LAGO', location: 'ראשון לציון', area: 'מרכז', price: '₪₪₪₪', image: '/images/venues/lago.jpg', imageSource: 'אתר המקום', website: 'https://www.lago-events.co.il/' },
+    { id: 2, name: 'האחוזה מודיעין', location: 'מודיעין', area: 'מרכז', price: '₪₪₪₪', image: '/images/venues/aahuza.jpg', imageSource: 'אתר המקום', website: 'https://www.haahuzah.co.il/' },
+    { id: 3, name: 'EAST', location: 'תל אביב', area: 'מרכז', price: '₪₪₪₪', image: '/', imageSource: 'אתר המקום', website: 'https://east-tlv.co.il/' },
+    { id: 4, name: 'ריברסייד', location: 'תל אביב', area: 'מרכז', price: '₪₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.riverside.co.il/' },
+    { id: 5, name: 'טרויה', location: 'ראשון לציון', area: 'מרכז', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://troya-garden.co.il/' },
+    { id: 6, name: 'שבע', location: 'תל אביב', area: 'מרכז', price: '₪₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.sheva.co.il/' },
+    { id: 7, name: 'קיסר ים', location: 'קיסריה', area: 'שרון', price: '₪₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.caesaryam.com/' },
+    { id: 8, name: 'הגלריה', location: 'כפר ויתקין', area: 'שרון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://gallery-event.co.il/' },
+    { id: 9, name: 'גן ורדים', location: 'אבן יהודה', area: 'שרון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.gvradim.com/' },
+    { id: 10, name: 'עלמה', location: 'תל מונד', area: 'שרון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://almahouse.co.il/' },
+    { id: 11, name: 'Q גן אירועים', location: 'גליל ים', area: 'שרון', price: '₪₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://qce.co.il/' },
+    { id: 12, name: 'אגדתא', location: 'בארותיים', area: 'שרון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://agadata.com/' },
+    { id: 13, name: 'גני כנען', location: 'חיפה', area: 'צפון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 14, name: 'ביער', location: 'חדרה', area: 'צפון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 15, name: 'קסיופיאה', location: 'הרצליה (חוף ים)', area: 'צפון', price: '₪₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 16, name: 'אמארה', location: 'עפולה', area: 'צפון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.amare.co.il/' },
+    { id: 17, name: 'טופ דוראן', location: 'צומת כפר קרע', area: 'צפון', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 18, name: 'שמיים וארץ', location: 'כרמל', area: 'צפון', price: '₪₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 19, name: 'חוות רונית', location: 'אזור הרי יהודה', area: 'דרום', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://ronitfarm.com/' },
+    { id: 20, name: 'נסיה', location: 'באר שבע', area: 'דרום', price: '₪₪', image: '', imageSource: 'אתר המקום', website: 'https://nesyaevent.co.il/' },
+    { id: 21, name: 'בית על הים', location: 'אשקלון', area: 'דרום', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.housea.co.il/' },
+    { id: 22, name: 'אלמה', location: 'נתיבות', area: 'דרום', price: '₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 23, name: 'חצר המלכה', location: 'קריית מלאכי', area: 'דרום', price: '₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 24, name: 'אחוזת טל', location: 'אשדוד', area: 'דרום', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 25, name: 'עין יעל', location: 'גן ארכיאולוגי פתוח', area: 'ירושלים', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://ein-yael.co.il/' },
+    { id: 26, name: 'קדם', location: 'מעלה החמישה', area: 'ירושלים', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.kedem.io/' },
+    { id: 27, name: 'ברכה בגנים', location: 'מבשרת ציון', area: 'ירושלים', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 28, name: 'ויה', location: 'ירושלים', area: 'ירושלים', price: '₪₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://via-events.co.il/' },
+    { id: 29, name: 'אולם הנסיכה', location: 'אזור תעשייה תלפיות', area: 'ירושלים', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: '' },
+    { id: 30, name: 'החצר האחורית', location: 'מושב אורה', area: 'ירושלים', price: '₪₪₪', image: '', imageSource: 'אתר המקום', website: 'https://www.thebackyard.co.il/' },
   ],
   photographers: [
     { id: 1, name: 'אלון הצלם', location: 'ארצי', area: 'ארצי', price: '₪₪₪', image: '/images/dummy/photographer1.jpg' },
