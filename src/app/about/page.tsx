@@ -13,7 +13,7 @@ export default function AboutPage() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>אודות Wedding Planner</h1>
+        <h1 style={styles.title}>קצת עלינו...</h1>
         <div style={styles.titleDecoration}></div>
       </div>
       
@@ -135,7 +135,7 @@ const styles = {
   },
   title: {
     fontSize: '3.5rem',
-    color: '#333',
+    color: '#FF4081',
     textAlign: 'center' as const,
     marginBottom: '1.2rem',
     fontFamily: 'var(--font-shrikhand), cursive',

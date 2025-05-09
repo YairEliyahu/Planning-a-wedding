@@ -953,6 +953,8 @@ export default function HomePage() {
             width: '100%',
             top: 0,
             left: 0,
+            height: '100vh',
+            overflow: 'auto'
           }}
           initial={false}
           animate={{
@@ -960,9 +962,9 @@ export default function HomePage() {
             opacity: activeSection === 1 ? 1 : 0
           }}
           transition={{
-            type: 'spring',
-            stiffness: 100,
-            damping: 20,
+            type: 'tween',
+            duration: 0.7,
+            ease: 'easeInOut',
             opacity: { duration: 0.5 }
           }}
         >
