@@ -1093,8 +1093,9 @@ export default function HomePage() {
             <div style={styles.contactForm}>
               <form onSubmit={handleSubmit}>
                 <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>שם מלא</label>
+                  <label htmlFor="name" style={styles.formLabel}>שם מלא</label>
                   <input 
+                    id="name"
                     type="text" 
                     name="name"
                     value={formData.name}
@@ -1106,8 +1107,9 @@ export default function HomePage() {
                 </div>
                 
                 <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>כתובת אימייל</label>
+                  <label htmlFor="email" style={styles.formLabel}>כתובת אימייל</label>
                   <input 
+                    id="email"
                     type="email" 
                     name="email"
                     value={formData.email}
@@ -1119,8 +1121,9 @@ export default function HomePage() {
                 </div>
                 
                 <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>מספר טלפון</label>
+                  <label htmlFor="phone" style={styles.formLabel}>מספר טלפון</label>
                   <input 
+                    id="phone"
                     type="tel" 
                     name="phone"
                     value={formData.phone}
@@ -1131,8 +1134,9 @@ export default function HomePage() {
                 </div>
                 
                 <div style={styles.formGroup}>
-                  <label style={styles.formLabel}>הודעה</label>
+                  <label htmlFor="message" style={styles.formLabel}>הודעה</label>
                   <textarea 
+                    id="message"
                     name="message"
                     value={formData.message}
                     onChange={handleInputChange}

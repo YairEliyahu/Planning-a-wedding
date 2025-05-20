@@ -6,9 +6,13 @@ import User from '@/models/User';
 
 // מטמון עבור חיבור ה-OAuth2, כדי למנוע יצירה חדשה בכל קריאה
 let cachedOAuth2Client: any = null;
+let cachedOAuth2: any = null;
+
+// מטמון עבור חיבור למסד הנתונים
+let dbConnection: any = null;
 
 export async function GET(request: Request) {
-  console.time('google-auth-callback'); // מדידת זמן ביצועים
+  console.time('google-auth-callback');
   try {
     const { searchParams } = new URL(request.url);
     const code = searchParams.get('code');
@@ -24,21 +28,21 @@ export async function GET(request: Request) {
         process.env.GOOGLE_CLIENT_SECRET,
         process.env.GOOGLE_REDIRECT_URI
       );
+      cachedOAuth2 = google.oauth2({ version: 'v2', auth: cachedOAuth2Client });
     }
 
     const oauth2Client = cachedOAuth2Client;
+    const oauth2 = cachedOAuth2;
 
     // ביצוע קריאה מקבילה של הטוקן ומסד הנתונים
     const tokenPromise = oauth2Client.getToken(code);
-    const dbConnectPromise = connectToDatabase();
+    const dbConnectPromise = dbConnection ? Promise.resolve(dbConnection) : connectToDatabase();
     
-    const [tokenResponse, _] = await Promise.all([tokenPromise, dbConnectPromise]);
+    const [tokenResponse, connection] = await Promise.all([tokenPromise, dbConnectPromise]);
+    dbConnection = connection;
     
     const { tokens } = tokenResponse;
     oauth2Client.setCredentials(tokens);
-    
-    // שימוש באובייקט oauth2 קיים במקום ליצור חדש
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     
     console.time('userinfo-get');
     const { data } = await oauth2.userinfo.get();
@@ -50,7 +54,9 @@ export async function GET(request: Request) {
 
     // מציאת משתמש מהר יותר עם אינדקס מתאים (הנחה שיש אינדקס על מייל)
     console.time('find-or-create-user');
-    const existingUser = await User.findOne({ email: data.email }).select('_id email fullName displayName authProvider profilePicture isProfileComplete');
+    const existingUser = await User.findOne({ email: data.email })
+      .select('_id email fullName displayName authProvider profilePicture isProfileComplete')
+      .lean(); // שימוש ב-lean() לקבלת אובייקט JavaScript רגיל במקום מונגו
 
     let userData;
     let isNewUser = false;
