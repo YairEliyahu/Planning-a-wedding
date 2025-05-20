@@ -4,6 +4,13 @@ import User from '../../../../models/User';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
+// מטמון עבור חיבור למסד הנתונים
+let dbConnection: mongoose.Connection | null = null;
+
+// מטמון עבור נתוני משתמש
+const userCache = new Map<string, { data: UserDocument; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 דקות
+
 // Define a type for the user document
 interface UserDocument {
   _id: mongoose.Types.ObjectId;
@@ -33,9 +40,22 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    await connectDB();
+    // בדיקת מטמון
+    const cachedUser = userCache.get(params.id);
+    if (cachedUser && Date.now() - cachedUser.timestamp < CACHE_TTL) {
+      return NextResponse.json({ user: cachedUser.data });
+    }
+
+    // חיבור למסד הנתונים עם מטמון
+    if (!dbConnection) {
+      await connectDB();
+      dbConnection = mongoose.connection;
+    }
+
     const userId = params.id;
-    const user = await User.findById(userId);
+    const user = await User.findById(userId)
+      .select('-password') // לא נביא את הסיסמה
+      .lean(); // שימוש ב-lean() לקבלת אובייקט JavaScript רגיל
 
     if (!user) {
       return NextResponse.json(
@@ -43,6 +63,12 @@ export async function GET(
         { status: 404 }
       );
     }
+
+    // שמירה במטמון
+    userCache.set(params.id, {
+      data: user as unknown as UserDocument,
+      timestamp: Date.now()
+    });
 
     return NextResponse.json({ user });
   } catch (error) {

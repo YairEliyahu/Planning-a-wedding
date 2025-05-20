@@ -4,6 +4,13 @@ import Guest from '@/models/Guest';
 import mongoose from 'mongoose';
 import User from '@/models/User';
 
+// מטמון עבור חיבור למסד הנתונים
+let dbConnection: mongoose.Connection | null = null;
+
+// מטמון עבור רשימת אורחים
+const guestsCache = new Map<string, { data: GuestType[]; timestamp: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 דקות
+
 // Define a basic guest type for our use
 export type GuestType = {
   _id: mongoose.Types.ObjectId | string;
@@ -34,11 +41,29 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Connect to the database
-    await dbConnect();
+    // בדיקת מטמון אם אין צורך בסנכרון כפוי
+    if (!forceSync) {
+      const cachedGuests = guestsCache.get(userId);
+      if (cachedGuests && Date.now() - cachedGuests.timestamp < CACHE_TTL) {
+        return NextResponse.json({
+          success: true,
+          guests: cachedGuests.data
+        });
+      }
+    }
+
+    // Connect to the database with caching
+    if (!dbConnection) {
+      await dbConnect();
+      dbConnection = mongoose.connection;
+    }
 
     // First, check if user has a connected account
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).lean() as {
+      _id: mongoose.Types.ObjectId;
+      sharedEventId?: string;
+      connectedUserId?: string;
+    };
     if (!user) {
       return NextResponse.json(
         { message: 'User not found' },
@@ -65,10 +90,7 @@ export async function GET(req: NextRequest) {
           
           // 2. צור מפה של אורחים ייחודיים לפי שם (מפתח ראשי)
           const uniqueGuests = new Map<string, {
-            // We need to use any here as we're working with mongoose documents
-            // which have complex types
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            latestGuest: any;
+            latestGuest: GuestType;
             instances: string[];
             users: string[];
           }>();
@@ -105,7 +127,6 @@ export async function GET(req: NextRequest) {
           console.log(`[GUEST API] Found ${uniqueGuests.size} unique guests from ${sharedGuests.length} total entries`);
           
           // מחק את כל האורחים הכפולים ושמור רק את האורח העדכני ביותר מכל שם
-          // Safely iterate over Map entries using Array.from to avoid downlevelIteration errors
           for (const [guestName, entry] of Array.from(uniqueGuests.entries())) {
             // אם יש יותר ממופע אחד של האורח (כלומר יש כפילות)
             if (entry.instances.length > 1) {
@@ -135,7 +156,10 @@ export async function GET(req: NextRequest) {
       
       // כעת קבל את כל האורחים המשותפים (אחרי הסנכרון והניקוי)
       // פשוט השתמש ב-sharedEventId לקבלת כל האורחים
-      const sharedGuests = await Guest.find({ sharedEventId: user.sharedEventId }).lean();
+      const sharedGuests = await Guest.find({ sharedEventId: user.sharedEventId })
+        .lean()
+        .sort({ updatedAt: -1 }); // מיון לפי תאריך עדכון אחרון
+      
       console.log(`[GUEST API] Found ${sharedGuests.length} guests with sharedEventId ${user.sharedEventId}`);
       
       // Use the specialized organizing method with the shared guests
@@ -163,7 +187,9 @@ export async function GET(req: NextRequest) {
         
         const guestsByUserId = await Guest.find({ 
           userId: { $in: userIds.map(id => new mongoose.Types.ObjectId(id)) } 
-        }).lean();
+        })
+        .lean()
+        .sort({ updatedAt: -1 }); // מיון לפי תאריך עדכון אחרון
         
         console.log(`[GUEST API] Found ${guestsByUserId.length} guests by userIds`);
         
@@ -193,12 +219,21 @@ export async function GET(req: NextRequest) {
       }
     } else {
       // Fallback: get guests only for this specific user
-      const userGuests = await Guest.find({ userId: new mongoose.Types.ObjectId(userId) }).lean();
+      const userGuests = await Guest.find({ userId: new mongoose.Types.ObjectId(userId) })
+        .lean()
+        .sort({ updatedAt: -1 }); // מיון לפי תאריך עדכון אחרון
+      
       console.log(`[GUEST API] Fallback: Found ${userGuests.length} guests for user ${userId}`);
       
       // נחזיר ישירות את המערך של האורחים
       guestsResult = userGuests as unknown as GuestType[];
     }
+
+    // שמירה במטמון
+    guestsCache.set(userId, {
+      data: guestsResult,
+      timestamp: Date.now()
+    });
 
     return NextResponse.json({
       success: true,
