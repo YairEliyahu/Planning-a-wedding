@@ -35,8 +35,13 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: 'אפליקציית חתונה - תכננו את החתונה המושלמת',
+  title: 'Wedding Planner',
   description: 'כלי מקיף לתכנון חתונה מושלמת - נהלו את האורחים, הספקים, והתקציב שלכם בצורה קלה ואינטואיטיבית.',
+  icons: {
+    icon: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
+    shortcut: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
+    apple: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
+  },
 };
 
 export default function RootLayout({
