@@ -56,7 +56,7 @@ const NavbarProfile = () => {
               href={`/user/${user._id}`} 
               style={{
                 ...styles.tab,
-                ...(isActive(`/user/${user._id}`) && !isActive('/edit') && !isActive('/wedding') && !isActive('/checklist') && !isActive('/guestlist') ? styles.activeTab : {})
+                ...(isActive(`/user/${user._id}`) && !isActive('/edit') && !isActive('/wedding') && !isActive('/checklist') && !isActive('/guestlist') && !isActive('/invitations') ? styles.activeTab : {})
               }}
             >
               הפרופיל שלי
@@ -100,6 +100,16 @@ const NavbarProfile = () => {
               }}
             >
               ניהול רשימת מוזמנים
+            </Link>
+
+            <Link 
+              href={`/user/${user._id}/invitations`}
+              style={{
+                ...styles.tab,
+                ...(isActive('/invitations') ? styles.activeTab : {})
+              }}
+            >
+              🎨 יצירת הזמנות
             </Link>
           </div>
         </div>

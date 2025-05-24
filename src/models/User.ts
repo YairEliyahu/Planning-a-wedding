@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
   authProvider: {
     type: String,
     required: true,
-    enum: ['google', 'email'],
+    enum: ['google', 'email', 'hybrid'],
     default: 'email'
   },
   providerId: String,

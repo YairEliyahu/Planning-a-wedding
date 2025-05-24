@@ -121,9 +121,9 @@ const Navbar = () => {
                 {...fadeIn}
               >
                 <div style={styles.authPlaceholder}>
-                  <div style={styles.loadingDot}></div>
-                  <div style={styles.loadingDot}></div>
-                  <div style={styles.loadingDot}></div>
+                  <div style={{...styles.loadingDot, animationDelay: '0s'}}></div>
+                  <div style={{...styles.loadingDot, animationDelay: '0.3s'}}></div>
+                  <div style={{...styles.loadingDot, animationDelay: '0.6s'}}></div>
                 </div>
               </motion.div>
             ) : user ? (
@@ -355,23 +355,6 @@ const styles = {
     backgroundColor: '#0070f3',
     borderRadius: '50%',
     animation: 'pulse 1.5s ease-in-out infinite',
-    animationDelay: '0s',
-    '&:nth-child(2)': {
-      animationDelay: '0.3s',
-    },
-    '&:nth-child(3)': {
-      animationDelay: '0.6s',
-    },
-    '@keyframes pulse': {
-      '0%, 100%': {
-        transform: 'scale(0.5)',
-        opacity: 0.5,
-      },
-      '50%': {
-        transform: 'scale(1)',
-        opacity: 1,
-      },
-    },
   },
 };
 

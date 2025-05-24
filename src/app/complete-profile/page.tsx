@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
-import Image from 'next/image';
 import Navbar from '@/components/Navbar';
 import { StepItem } from '@/components/step-item';
 import { Button } from '@/components/ui/button';
@@ -658,13 +657,9 @@ export default function CompleteProfile() {
                   נשמח לדעת עוד פרטים על החתונה שלכם
                 </p>
               </div>
-              <Image
-                src="/images/logo.png"
-                alt="Logo"
-                width={80}
-                height={80}
-                className="mb-4"
-              />
+              <div className="w-20 h-20 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full flex items-center justify-center mb-4">
+                <span className="text-3xl text-white">💒</span>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="grid md:grid-cols-[240px_1fr] gap-8 p-6">

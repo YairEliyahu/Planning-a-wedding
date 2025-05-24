@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -225,13 +224,9 @@ export default function RegisterWithInvitation() {
     <div dir="rtl" className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col items-center justify-center p-4">
       <Card className="w-full max-w-md shadow-lg">
         <CardHeader className="flex flex-col items-center border-b p-6">
-          <Image
-            src="/images/logo.png"
-            alt="Logo"
-            width={80}
-            height={80}
-            className="mb-4"
-          />
+          <div className="w-20 h-20 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full flex items-center justify-center mb-4">
+            <span className="text-3xl text-white">💒</span>
+          </div>
           <CardTitle className="text-2xl font-bold text-center">רישום באמצעות הזמנה</CardTitle>
         </CardHeader>
         

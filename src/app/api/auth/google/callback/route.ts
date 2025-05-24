@@ -55,15 +55,36 @@ export async function GET(request: Request) {
     // מציאת משתמש מהר יותר עם אינדקס מתאים (הנחה שיש אינדקס על מייל)
     console.time('find-or-create-user');
     const existingUser = await User.findOne({ email: data.email })
-      .select('_id email fullName displayName authProvider profilePicture isProfileComplete')
+      .select('_id email fullName displayName authProvider profilePicture isProfileComplete password')
       .lean(); // שימוש ב-lean() לקבלת אובייקט JavaScript רגיל במקום מונגו
 
-    let userData;
+    let userData: any;
     let isNewUser = false;
     
     if (existingUser) {
-      console.log('Found existing user:', existingUser._id);
-      userData = existingUser;
+      console.log('Found existing user:', (existingUser as any)._id);
+      
+      // אם המשתמש הקיים אין לו Google auth או שהוא רק עם סיסמה
+      if ((existingUser as any).authProvider === 'email' || !(existingUser as any).authProvider) {
+        // עדכון המשתמש הקיים להיות hybrid (תומך בשני סוגי אימות)
+        await User.findByIdAndUpdate((existingUser as any)._id, {
+          authProvider: (existingUser as any).password ? 'hybrid' : 'google',
+          profilePicture: data.picture || (existingUser as any).profilePicture,
+          emailVerified: true
+        });
+        
+        // עדכון הנתונים המקומיים
+        userData = {
+          ...existingUser,
+          authProvider: (existingUser as any).password ? 'hybrid' : 'google',
+          profilePicture: data.picture || (existingUser as any).profilePicture,
+          emailVerified: true
+        };
+        
+        console.log('Updated existing user to support Google auth');
+      } else {
+        userData = existingUser;
+      }
     } else {
       // יצירת משתמש חדש עם מידע מינימלי
       const newUser = new User({

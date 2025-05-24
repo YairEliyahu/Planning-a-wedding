@@ -106,7 +106,21 @@ export default function LoginPage() {
 
       const data = await response.json();
 
-      if (!response.ok) throw new Error(data.message);
+      if (!response.ok) {
+        // בדיקה אם זה משתמש Google שיכול להגדיר סיסמה
+        if (data.action === 'USE_GOOGLE_OR_SET_PASSWORD') {
+          const confirmSetPassword = window.confirm(
+            `${data.message}\n\nהאם תרצה להגדיר סיסמה כדי להתחבר גם בלי Google?`
+          );
+          
+          if (confirmSetPassword) {
+            router.push(`/set-password?email=${encodeURIComponent(data.email)}`);
+            return;
+          }
+        }
+        
+        throw new Error(data.message);
+      }
 
       await login(data.token, data.user);
       
