@@ -2,6 +2,12 @@
 import { jest } from '@jest/globals';
 import '@testing-library/jest-dom';
 
+// Mock TextEncoder and TextDecoder for MSW
+Object.assign(global, {
+  TextEncoder: require('util').TextEncoder,
+  TextDecoder: require('util').TextDecoder,
+});
+
 // Mock next/router
 jest.mock('next/router', () => ({
   useRouter() {

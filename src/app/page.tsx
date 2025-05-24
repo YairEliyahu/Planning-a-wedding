@@ -356,6 +356,8 @@ export default function HomePage() {
   const { login, user } = useAuth();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
+  const [imagesLoaded, setImagesLoaded] = useState(false);
+  const [imageLoadErrors, setImageLoadErrors] = useState<string[]>([]);
   const [shuffledImages, setShuffledImages] = useState<string[]>([]);
   const [activeSection, setActiveSection] = useState(0);
   const isScrolling = useRef(false);
@@ -375,7 +377,7 @@ export default function HomePage() {
     isError: false,
     errorMessage: ''
   });
-  
+
   // רפרנסים לחלקי העמוד
   const heroSectionRef = useRef<HTMLElement>(null);
   const aboutSectionRef = useRef<HTMLDivElement>(null);
@@ -457,15 +459,15 @@ export default function HomePage() {
     }
   };
 
-  // אנימציה לסרגל התמונות
+  // אנימציה לסרגל התמונות - רצף ללא הפסקה
   const sliderVariants = {
     animate: {
-      x: ['0%', '-50%'],
+      x: ['0%', '-25%'],
       transition: {
         x: {
           repeat: Infinity,
           repeatType: 'loop' as const,
-          duration: 30,
+          duration: 25,
           ease: 'linear',
           repeatDelay: 0
         }
@@ -495,6 +497,39 @@ export default function HomePage() {
     }
   };
 
+  // פונקציה לטעינת תמונות מדורגת
+  const preloadImages = async () => {
+    try {
+      console.log('Starting image preload...');
+      const imagePromises = backgroundImages.map((src) => {
+        return new Promise<string>((resolve, reject) => {
+          const img = new window.Image();
+          img.onload = () => {
+            console.log(`Image loaded: ${src}`);
+            resolve(src);
+          };
+          img.onerror = () => {
+            console.error(`Failed to load image: ${src}`);
+            setImageLoadErrors(prev => [...prev, src]);
+            reject(src);
+          };
+          img.src = src;
+        });
+      });
+      
+      // המתנה לכל התמונות (גם אלו שנכשלו)
+      const results = await Promise.allSettled(imagePromises);
+      const loadedImages = results
+        .filter(result => result.status === 'fulfilled')
+        .map(result => (result as PromiseFulfilledResult<string>).value);
+      
+      console.log(`Images loaded successfully: ${loadedImages.length}/${backgroundImages.length}`);
+      setImagesLoaded(true);
+    } catch (error) {
+      console.error('Error during image preload:', error);
+      setImagesLoaded(true); // להמשיך גם אם יש שגיאות
+    }
+  };
 
   // ערבוב התמונות בסדר רנדומלי בכל טעינה
   useEffect(() => {
@@ -508,8 +543,9 @@ export default function HomePage() {
       return newArray;
     };
 
-    // ערבוב התמונות בכל טעינה
+    // ערבוב התמונות וטעינה מדורגת
     setShuffledImages(shuffleArray(backgroundImages));
+    preloadImages();
   }, []);
 
   useEffect(() => {
@@ -531,7 +567,10 @@ export default function HomePage() {
       } catch (error) {
         console.error('Error processing user data:', error);
       } finally {
-        setIsLoading(false);
+        // מעכב קצת כדי לוודא שהתמונות התחילו להיטען
+        setTimeout(() => {
+          setIsLoading(false);
+        }, 100);
       }
     };
 
@@ -718,12 +757,21 @@ export default function HomePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-[#f9f4f0]">
         <motion.div 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"
-        />
+          className="text-center"
+        >
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4" />
+          <p className="text-lg text-gray-600 font-[var(--font-heebo)]">טוען את חוויית החתונה שלך...</p>
+          <p className="text-sm text-gray-400 mt-2 font-[var(--font-heebo)]">זה יכול לקחת כמה שניות</p>
+          {!imagesLoaded && (
+            <p className="text-xs text-gray-300 mt-2 font-[var(--font-heebo)]">
+              טוען תמונות ({backgroundImages.length - imageLoadErrors.length}/{backgroundImages.length})
+            </p>
+          )}
+        </motion.div>
       </div>
     );
   }
@@ -777,95 +825,80 @@ export default function HomePage() {
             style={styles.imageWrapper}
           >
             <motion.div 
-              style={styles.backgroundSlider}
+              style={{
+                ...styles.backgroundSlider,
+                width: '800%', // הגדלת רוחב עבור 4 עותקים של תמונות
+              }}
               animate="animate"
               variants={sliderVariants}
             >
-              {/* הצגה ראשונה של התמונות */}
-              {shuffledImages.map((image, index) => (
-                <motion.div 
-                  key={`first-${index}`} 
-                  style={{ 
-                    width: '19.8%',
-                    height: '100%',
-                    padding: 0,
-                    margin: '0 1px',
-                    backgroundColor: '#fbf7f3',
-                    borderRadius: 4,
-                    boxShadow: 'none',
-                    overflow: 'hidden',
-                  }} 
-                  initial={{ opacity: 0.9 }}
-                  animate={{ 
-                    opacity: 1,
-                    transition: { duration: 1.5 }
-                  }}
-                >
-                  <div style={{
-                    width: '100%',
-                    height: '100%',
-                    backgroundColor: 'rgba(251, 247, 243, 0.1)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    overflow: 'hidden',
-                    padding: 0,
-                    margin: 0,
-                  }}>
-                    <Image
-                      src={image}
-                      alt={`Wedding background ${index + 1}`}
-                      width={1920}
-                      height={1080}
-                      priority={index === 0}
-                      style={styles.backgroundImage}
-                    />
-                  </div>
-                </motion.div>
-              ))}
-              
-              {/* הצגה שנייה זהה של התמונות להמשכיות חלקה */}
-              {shuffledImages.map((image, index) => (
-                <motion.div 
-                  key={`second-${index}`} 
-                  style={{ 
-                    width: '19.8%',
-                    height: '100%',
-                    padding: 0,
-                    margin: '0 1px',
-                    backgroundColor: '#fbf7f3',
-                    borderRadius: 4,
-                    boxShadow: 'none',
-                    overflow: 'hidden',
-                  }} 
-                  initial={{ opacity: 0.9 }}
-                  animate={{ 
-                    opacity: 1,
-                    transition: { duration: 1.5 }
-                  }}
-                >
-                  <div style={{
-                    width: '100%',
-                    height: '100%',
-                    backgroundColor: 'rgba(251, 247, 243, 0.1)',
-                    display: 'flex',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    overflow: 'hidden',
-                    padding: 0,
-                    margin: 0,
-                  }}>
-                    <Image
-                      src={image}
-                      alt={`Wedding background ${index + 1}`}
-                      width={1920}
-                      height={1080}
-                      priority={false}
-                      style={styles.backgroundImage}
-                    />
-                  </div>
-                </motion.div>
-              ))}
+              {/* יצירת 4 עותקים של התמונות לרצף חלק */}
+              {[...Array(4)].map((_, groupIndex) => 
+                (shuffledImages.length > 0 ? shuffledImages : backgroundImages).map((image, index) => (
+                  <motion.div 
+                    key={`group-${groupIndex}-${index}`} 
+                    style={{ 
+                      width: '2.48%', // חלוקה ל-40 תמונות (5 תמונות × 8 קבוצות)
+                      height: '100%',
+                      padding: 0,
+                      margin: '0 1px',
+                      backgroundColor: '#fbf7f3',
+                      borderRadius: 4,
+                      boxShadow: 'none',
+                      overflow: 'hidden',
+                      flexShrink: 0,
+                    }} 
+                    initial={{ opacity: 0.9 }}
+                    animate={{ 
+                      opacity: 1,
+                      transition: { duration: 1.5 }
+                    }}
+                  >
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      backgroundColor: !imagesLoaded ? 'rgba(251, 247, 243, 0.3)' : 'rgba(251, 247, 243, 0.1)',
+                      display: 'flex',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      overflow: 'hidden',
+                      padding: 0,
+                      margin: 0,
+                    }}>
+                      {!imagesLoaded ? (
+                        <div style={{
+                          width: '100%',
+                          height: '100%',
+                          background: 'linear-gradient(45deg, #f9f4f0, #fff5f8)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <div style={{
+                            width: '20px',
+                            height: '20px',
+                            border: '2px solid #ff4081',
+                            borderTop: '2px solid transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite',
+                          }} />
+                        </div>
+                      ) : (
+                        <Image
+                          src={image}
+                          alt={`Wedding background ${index + 1}`}
+                          width={1920}
+                          height={1080}
+                          priority={groupIndex === 0 && index === 0}
+                          style={styles.backgroundImage}
+                          onLoad={() => console.log(`Image loaded: ${image}`)}
+                          onError={() => console.error(`Failed to load: ${image}`)}
+                        />
+                      )}
+                    </div>
+                  </motion.div>
+                ))
+              )}
             </motion.div>
             <div style={styles.overlay} />
           </motion.div>
