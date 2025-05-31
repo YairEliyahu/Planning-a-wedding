@@ -1,15 +1,30 @@
 import { NextResponse } from 'next/server';
-import { google } from 'googleapis';
-import connectToDatabase from '@/utils/dbConnect';
+import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
+import connectToDatabase from '@/utils/dbConnect';
 import User from '@/models/User';
 
-// מטמון עבור חיבור ה-OAuth2, כדי למנוע יצירה חדשה בכל קריאה
-let cachedOAuth2Client: any = null;
-let cachedOAuth2: any = null;
+// Define type for lean user query result
+type LeanUser = {
+  _id: string;
+  email: string;
+  fullName?: string;
+  displayName?: string;
+  authProvider?: string;
+  profilePicture?: string;
+  isProfileComplete?: boolean;
+  password?: string;
+};
 
-// מטמון עבור חיבור למסד הנתונים
-let dbConnection: any = null;
+// הצהרה על פונקציה נפרדת לקבלת מידע משתמש
+async function getUserInfo(accessToken: string) {
+  const response = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  return response.json();
+}
 
 export async function GET(request: Request) {
   console.time('google-auth-callback');
@@ -21,83 +36,70 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL('/login?error=NoCode', request.url));
     }
 
-    // שימוש במטמון חיבור OAuth2 אם קיים
-    if (!cachedOAuth2Client) {
-      cachedOAuth2Client = new google.auth.OAuth2(
-        process.env.GOOGLE_CLIENT_ID,
-        process.env.GOOGLE_CLIENT_SECRET,
-        process.env.GOOGLE_REDIRECT_URI
-      );
-      cachedOAuth2 = google.oauth2({ version: 'v2', auth: cachedOAuth2Client });
-    }
+    // שימוש ב-OAuth2Client במקום google.auth.OAuth2
+    const oauth2Client = new OAuth2Client(
+      process.env.GOOGLE_CLIENT_ID,
+      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GOOGLE_REDIRECT_URI
+    );
 
-    const oauth2Client = cachedOAuth2Client;
-    const oauth2 = cachedOAuth2;
+    // קבלת tokens + חיבור DB במקביל
+    const [tokenResponse] = await Promise.all([
+      oauth2Client.getToken(code),
+      connectToDatabase()
+    ]);
 
-    // ביצוע קריאה מקבילה של הטוקן ומסד הנתונים
-    const tokenPromise = oauth2Client.getToken(code);
-    const dbConnectPromise = dbConnection ? Promise.resolve(dbConnection) : connectToDatabase();
-    
-    const [tokenResponse, connection] = await Promise.all([tokenPromise, dbConnectPromise]);
-    dbConnection = connection;
-    
     const { tokens } = tokenResponse;
-    oauth2Client.setCredentials(tokens);
     
+    // קריאה ישירה ל-API במקום googleapis
     console.time('userinfo-get');
-    const { data } = await oauth2.userinfo.get();
+    const googleUserData = await getUserInfo(tokens.access_token!);
     console.timeEnd('userinfo-get');
 
-    if (!data.email) {
+    if (!googleUserData.email) {
       return NextResponse.redirect(new URL('/login?error=NoEmail', request.url));
     }
 
-    // מציאת משתמש מהר יותר עם אינדקס מתאים (הנחה שיש אינדקס על מייל)
+    // מציאת משתמש מהר יותר עם אינדקס מתאים
     console.time('find-or-create-user');
-    const existingUser = await User.findOne({ email: data.email })
+    const existingUser = await User.findOne({ email: googleUserData.email })
       .select('_id email fullName displayName authProvider profilePicture isProfileComplete password')
-      .lean(); // שימוש ב-lean() לקבלת אובייקט JavaScript רגיל במקום מונגו
+      .lean() as LeanUser | null;
 
-    let userData: any;
+    let finalUserData: LeanUser | (typeof User.prototype) | null;
     let isNewUser = false;
     
     if (existingUser) {
-      console.log('Found existing user:', (existingUser as any)._id);
+      console.log('Found existing user:', existingUser._id);
       
-      // אם המשתמש הקיים אין לו Google auth או שהוא רק עם סיסמה
-      if ((existingUser as any).authProvider === 'email' || !(existingUser as any).authProvider) {
-        // עדכון המשתמש הקיים להיות hybrid (תומך בשני סוגי אימות)
-        await User.findByIdAndUpdate((existingUser as any)._id, {
-          authProvider: (existingUser as any).password ? 'hybrid' : 'google',
-          profilePicture: data.picture || (existingUser as any).profilePicture,
+      if (existingUser.authProvider === 'email' || !existingUser.authProvider) {
+        await User.findByIdAndUpdate(existingUser._id, {
+          authProvider: existingUser.password ? 'hybrid' : 'google',
+          profilePicture: googleUserData.picture || existingUser.profilePicture,
           emailVerified: true
         });
         
-        // עדכון הנתונים המקומיים
-        userData = {
+        finalUserData = {
           ...existingUser,
-          authProvider: (existingUser as any).password ? 'hybrid' : 'google',
-          profilePicture: data.picture || (existingUser as any).profilePicture,
+          authProvider: existingUser.password ? 'hybrid' : 'google',
+          profilePicture: googleUserData.picture || existingUser.profilePicture,
           emailVerified: true
         };
-        
-        console.log('Updated existing user to support Google auth');
       } else {
-        userData = existingUser;
+        finalUserData = existingUser;
       }
     } else {
-      // יצירת משתמש חדש עם מידע מינימלי
       const newUser = new User({
-        email: data.email,
-        fullName: data.name,
-        displayName: data.name,
+        email: googleUserData.email,
+        fullName: googleUserData.name,
+        displayName: googleUserData.name,
         authProvider: 'google',
-        profilePicture: data.picture,
+        profilePicture: googleUserData.picture,
         emailVerified: true,
         isProfileComplete: false
       });
-      userData = await newUser.save();
-      console.log('Created new user:', userData._id);
+      finalUserData = await newUser.save();
+      console.log('Created new user:', finalUserData._id);
       isNewUser = true;
     }
     console.timeEnd('find-or-create-user');
@@ -106,10 +108,10 @@ export async function GET(request: Request) {
     console.time('jwt-sign');
     const token = jwt.sign(
       {
-        userId: userData._id.toString(),
-        email: userData.email,
-        fullName: userData.fullName || '',
-        isProfileComplete: userData.isProfileComplete || false
+        userId: finalUserData._id.toString(),
+        email: finalUserData.email,
+        fullName: finalUserData.fullName || '',
+        isProfileComplete: finalUserData.isProfileComplete || false
       },
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
@@ -118,17 +120,17 @@ export async function GET(request: Request) {
 
     // יצירת אובייקט נתוני משתמש מצומצם לצד לקוח
     const userDataForClient = {
-      _id: userData._id.toString(),
-      email: userData.email,
-      fullName: userData.fullName,
-      displayName: userData.displayName,
-      profilePicture: userData.profilePicture,
-      isProfileComplete: userData.isProfileComplete
+      _id: finalUserData._id.toString(),
+      email: finalUserData.email,
+      fullName: finalUserData.fullName,
+      displayName: finalUserData.displayName,
+      profilePicture: finalUserData.profilePicture,
+      isProfileComplete: finalUserData.isProfileComplete
     };
 
     // קביעת כתובת הפניה בהתאם למצב המשתמש
     let redirectUrl;
-    if (isNewUser || !userData.isProfileComplete) {
+    if (isNewUser || !finalUserData.isProfileComplete) {
       redirectUrl = new URL('/complete-profile', request.url);
     } else {
       redirectUrl = new URL('/', request.url);

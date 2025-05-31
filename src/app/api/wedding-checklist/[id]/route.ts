@@ -1,14 +1,7 @@
 import { NextResponse } from 'next/server';
 import connectToDatabase from '../../../../utils/dbConnect';
 import User from '../../../../models/User';
-
-// ✅ הגדרות אופטימליות
-const opts = {
-  bufferCommands: false,        // תגובה מהירה לשגיאות
-  connectTimeoutMS: 10000,      // 10 שניות מקסימום לחיבור
-  maxPoolSize: 10,              // עד 10 חיבורים במקביל
-  serverSelectionTimeoutMS: 5000 // בחירת שרת תוך 5 שניות
-};
+import clientPromise from '@/lib/mongodb';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
@@ -21,6 +14,10 @@ export async function GET(request: Request, { params }: { params: { id: string }
     
     const mongoose = await connectToDatabase();
     const db = mongoose.connection.db;
+    
+    if (!db) {
+      throw new Error('Database connection not available');
+    }
     
     const checklist = await db.collection('checklists').findOne({ userId: params.id });
     
