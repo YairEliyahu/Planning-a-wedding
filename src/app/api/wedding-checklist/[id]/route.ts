@@ -1,28 +1,27 @@
 import { NextResponse } from 'next/server';
-import clientPromise from '../../../../lib/mongodb';
+import connectToDatabase from '../../../../utils/dbConnect';
 import User from '../../../../models/User';
+
+// ✅ הגדרות אופטימליות
+const opts = {
+  bufferCommands: false,        // תגובה מהירה לשגיאות
+  connectTimeoutMS: 10000,      // 10 שניות מקסימום לחיבור
+  maxPoolSize: 10,              // עד 10 חיבורים במקביל
+  serverSelectionTimeoutMS: 5000 // בחירת שרת תוך 5 שניות
+};
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
-    const client = await clientPromise;
-    const db = client.db();
+    await connectToDatabase();
     
-    // Check if user has a connected account
     const user = await User.findById(params.id);
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    // If user has a sharedEventId and is not the main owner, get checklist from the main owner
-    if (user.sharedEventId && !user.isMainEventOwner && user.connectedUserId) {
-      // Get main user's checklist
-      const mainUserChecklist = await db.collection('checklists').findOne({ userId: user.connectedUserId.toString() });
-      if (mainUserChecklist) {
-        return NextResponse.json({ checklist: mainUserChecklist.categories || [] });
-      }
-    }
+    const mongoose = await connectToDatabase();
+    const db = mongoose.connection.db;
     
-    // Otherwise, get the user's own checklist
     const checklist = await db.collection('checklists').findOne({ userId: params.id });
     
     return NextResponse.json({ checklist: checklist?.categories || [] });
