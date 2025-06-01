@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server';
-import connectDB from '../../../../lib/db';
+import connectToDatabase from '../../../../utils/dbConnect';
 import User from '../../../../models/User';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-
-// מטמון עבור חיבור למסד הנתונים
-let dbConnection: mongoose.Connection | null = null;
 
 // מטמון עבור נתוני משתמש
 const userCache = new Map<string, { data: UserDocument; timestamp: number }>();
@@ -46,11 +43,8 @@ export async function GET(
       return NextResponse.json({ user: cachedUser.data });
     }
 
-    // חיבור למסד הנתונים עם מטמון
-    if (!dbConnection) {
-      await connectDB();
-      dbConnection = mongoose.connection;
-    }
+    // חיבור למסד הנתונים
+    await connectToDatabase();
 
     const userId = params.id;
     const user = await User.findById(userId)
@@ -72,6 +66,7 @@ export async function GET(
 
     return NextResponse.json({ user });
   } catch (error) {
+    console.error('Error fetching user:', error);
     return NextResponse.json(
       { message: 'Failed to fetch user', error: (error as Error).message },
       { status: 500 }
@@ -84,7 +79,7 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    await connectDB();
+    await connectToDatabase();
     const userId = params.id;
     const userData = await request.json();
 
@@ -128,6 +123,7 @@ export async function PUT(
       user
     });
   } catch (error) {
+    console.error('Error updating user:', error);
     return NextResponse.json(
       { message: 'Failed to update user', error: (error as Error).message },
       { status: 500 }
@@ -141,7 +137,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
-    await connectDB();
+    await connectToDatabase();
 
     // עידוא שה-ID תקין
     if (!params.id || !mongoose.Types.ObjectId.isValid(params.id)) {

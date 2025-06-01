@@ -167,9 +167,9 @@ export default function CategoryPage({ params }: Params) {
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [filteredVendors, setFilteredVendors] = useState<Vendor[]>([]);
   const [currentCategory, setCurrentCategory] = useState<any>(null);
-  const [areaFilter, setAreaFilter] = useState<string>("");
-  const [priceFilter, setPriceFilter] = useState<string>("");
-  const [sortOption, setSortOption] = useState<string>("popularity");
+  const [areaFilter, setAreaFilter] = useState<string>('');
+  const [priceFilter, setPriceFilter] = useState<string>('');
+  const [sortOption, setSortOption] = useState<string>('popularity');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const vendorsPerPage = 15;
 
@@ -195,11 +195,11 @@ export default function CategoryPage({ params }: Params) {
     // סינון לפי אזור
     if (areaFilter) {
       result = result.filter(vendor => {
-        if (areaFilter === "center") return vendor.area === "מרכז";
-        if (areaFilter === "north") return vendor.area === "צפון";
-        if (areaFilter === "south") return vendor.area === "דרום";
-        if (areaFilter === "sharon") return vendor.area === "שרון";
-        if (areaFilter === "jerusalem") return vendor.area === "ירושלים";
+        if (areaFilter === 'center') return vendor.area === 'מרכז';
+        if (areaFilter === 'north') return vendor.area === 'צפון';
+        if (areaFilter === 'south') return vendor.area === 'דרום';
+        if (areaFilter === 'sharon') return vendor.area === 'שרון';
+        if (areaFilter === 'jerusalem') return vendor.area === 'ירושלים';
         return true;
       });
     }
@@ -207,17 +207,17 @@ export default function CategoryPage({ params }: Params) {
     // סינון לפי מחיר
     if (priceFilter) {
       result = result.filter(vendor => {
-        if (priceFilter === "low") return vendor.price === "₪" || vendor.price === "₪₪";
-        if (priceFilter === "medium") return vendor.price === "₪₪" || vendor.price === "₪₪₪";
-        if (priceFilter === "high") return vendor.price === "₪₪₪₪";
+        if (priceFilter === 'low') return vendor.price === '₪' || vendor.price === '₪₪';
+        if (priceFilter === 'medium') return vendor.price === '₪₪' || vendor.price === '₪₪₪';
+        if (priceFilter === 'high') return vendor.price === '₪₪₪₪';
         return true;
       });
     }
     
     // מיון התוצאות
-    if (sortOption === "price_low") {
+    if (sortOption === 'price_low') {
       result.sort((a, b) => a.price.length - b.price.length);
-    } else if (sortOption === "price_high") {
+    } else if (sortOption === 'price_high') {
       result.sort((a, b) => b.price.length - a.price.length);
     }
     

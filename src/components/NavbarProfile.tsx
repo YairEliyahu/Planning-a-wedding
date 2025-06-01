@@ -56,7 +56,7 @@ const NavbarProfile = () => {
               href={`/user/${user._id}`} 
               style={{
                 ...styles.tab,
-                ...(isActive(`/user/${user._id}`) && !isActive('/edit') && !isActive('/wedding') && !isActive('/checklist') && !isActive('/guestlist') && !isActive('/invitations') ? styles.activeTab : {})
+                ...(isActive(`/user/${user._id}`) && !isActive('/edit') && !isActive('/wedding') && !isActive('/checklist') && !isActive('/guestlist') && !isActive('/seating') ? styles.activeTab : {})
               }}
             >
               הפרופיל שלי
@@ -103,13 +103,13 @@ const NavbarProfile = () => {
             </Link>
 
             <Link 
-              href={`/user/${user._id}/invitations`}
+              href={`/user/${user._id}/seating`}
               style={{
                 ...styles.tab,
-                ...(isActive('/invitations') ? styles.activeTab : {})
+                ...(isActive('/seating') ? styles.activeTab : {})
               }}
             >
-              🎨 יצירת הזמנות
+              🪑 סידורי הושבה
             </Link>
           </div>
         </div>
