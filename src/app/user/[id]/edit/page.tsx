@@ -318,8 +318,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               <h3 style={styles.sectionTitle}>פרטים אישיים</h3>
               
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>שם מלא</label>
+                <label htmlFor="fullName" style={styles.label}>שם מלא</label>
                 <input
+                  id="fullName"
                   type="text"
                   name="fullName"
                   value={formData.fullName}
@@ -330,8 +331,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>טלפון</label>
+                <label htmlFor="phone" style={styles.label}>טלפון</label>
                 <input
+                  id="phone"
                   type="tel"
                   name="phone"
                   value={formData.phone}
@@ -342,8 +344,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>אימייל</label>
+                <label htmlFor="email" style={styles.label}>אימייל</label>
                 <input
+                  id="email"
                   type="email"
                   value={profile.email}
                   style={{ ...styles.input, backgroundColor: '#f5f5f5' }}
@@ -357,8 +360,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               <h3 style={styles.sectionTitle}>פרטי האירוע</h3>
               
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>מיקום האירוע</label>
+                <label htmlFor="venueType" style={styles.label}>מיקום האירוע</label>
                 <select
+                  id="venueType"
                   name="venueType"
                   value={formData.venueType}
                   onChange={handleChange}
@@ -371,8 +375,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>שעת האירוע</label>
+                <label htmlFor="timeOfDay" style={styles.label}>שעת האירוע</label>
                 <select
+                  id="timeOfDay"
                   name="timeOfDay"
                   value={formData.timeOfDay}
                   onChange={handleChange}
@@ -385,8 +390,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>אזור בארץ</label>
+                <label htmlFor="locationPreference" style={styles.label}>אזור בארץ</label>
                 <select
+                  id="locationPreference"
                   name="locationPreference"
                   value={formData.locationPreference}
                   onChange={handleChange}
@@ -400,8 +406,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>תאריך החתונה</label>
+                <label htmlFor="weddingDate" style={styles.label}>תאריך החתונה</label>
                 <input
+                  id="weddingDate"
                   type="date"
                   name="weddingDate"
                   value={formData.weddingDate}
@@ -411,8 +418,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>שם בן/בת הזוג</label>
+                <label htmlFor="partnerName" style={styles.label}>שם בן/בת הזוג</label>
                 <input
+                  id="partnerName"
                   type="text"
                   name="partnerName"
                   value={formData.partnerName}
@@ -422,8 +430,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>טלפון בן/בת הזוג</label>
+                <label htmlFor="partnerPhone" style={styles.label}>טלפון בן/בת הזוג</label>
                 <input
+                  id="partnerPhone"
                   type="tel"
                   name="partnerPhone"
                   value={formData.partnerPhone}
@@ -433,9 +442,10 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.partnerEmailContainer}>
-                <label style={styles.label}>אימייל בן/בת הזוג</label>
+                <label htmlFor="partnerEmail" style={styles.label}>אימייל בן/בת הזוג</label>
                 <div style={styles.partnerEmailWrapper}>
                   <input
+                    id="partnerEmail"
                     type="email"
                     name="partnerEmail"
                     value={formData.partnerEmail}
@@ -493,8 +503,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>מספר אורחים משוער</label>
+                <label htmlFor="expectedGuests" style={styles.label}>מספר אורחים משוער</label>
                 <input
+                  id="expectedGuests"
                   type="number"
                   name="expectedGuests"
                   value={formData.expectedGuests}
@@ -504,8 +515,9 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
               </div>
 
               <div style={styles.fieldContainer}>
-                <label style={styles.label}>תקציב משוער</label>
+                <label htmlFor="budget" style={styles.label}>תקציב משוער</label>
                 <input
+                  id="budget"
                   type="number"
                   name="budget"
                   value={formData.budget}
