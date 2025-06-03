@@ -3,7 +3,7 @@ import './globals.css';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
-import { useEffect, useState, useRef, FormEvent } from 'react';
+import { useEffect, useState, useRef, FormEvent, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
@@ -362,6 +362,9 @@ export default function HomePage() {
   const [activeSection, setActiveSection] = useState(0);
   const isScrolling = useRef(false);
   const touchStartY = useRef(0);
+  const lastScrollTime = useRef(0);
+  const animationFrameId = useRef<number | null>(null);
+  const sectionTransitionTimeout = useRef<NodeJS.Timeout | null>(null);
   
   // הוספת state לטופס יצירת קשר
   const [formData, setFormData] = useState({
@@ -385,13 +388,13 @@ export default function HomePage() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   // תמונות רקע
-  const backgroundImages = [
+  const backgroundImages = useMemo(() => [
     '/images/wedding-background.jpg',
     '/images/311691308_10223945859767494_4494901931895656765_n.jpg',
     '/images/430853596_10226981026324761_6445618788012733513_n.jpg',
     '/images/475104690_10229871826952970_7379256486698947066_n.jpg',
     '/images/475280938_10229871827872993_8154661980827464805_n.jpg',
-  ];
+  ], []);
 
   // אנימציות לכיתוב מדורג
   const firstTitleVariants = {
@@ -577,85 +580,172 @@ export default function HomePage() {
     initializeUser();
   }, [searchParams, login]);
 
-  // מעבר בין חלקי העמוד עם גלילה
-  const handleScroll = (e: WheelEvent) => {
+  // מעבר בין חלקי העמוד עם גלילה - מוכן עם useCallback
+  const handleScroll = useCallback((e: WheelEvent) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    const now = Date.now();
+    // Debouncing מופחת למניעת רגישות יתר
+    if (now - lastScrollTime.current < 100) return;
+    lastScrollTime.current = now;
     
     // מניעת טריגר כפול
     if (isScrolling.current) return;
     isScrolling.current = true;
     
-    setTimeout(() => {
-      isScrolling.current = false;
-    }, 800); // זמן קצר יותר לאפקט חלק
-    
-    if (e.deltaY > 0) {
-      // גלילה למטה
-      if (activeSection < 2) {
-        setActiveSection(prev => prev + 1);
-      }
-    } else {
-      // גלילה למעלה
-      if (activeSection > 0) {
-        setActiveSection(prev => prev - 1);
-      }
+    // שימוש ב-requestAnimationFrame לביצועים טובים יותר
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
     }
-  };
+    
+    animationFrameId.current = requestAnimationFrame(() => {
+      const currentSection = activeSection;
+      let nextSection = currentSection;
+      
+      if (e.deltaY > 0) {
+        // גלילה למטה
+        nextSection = currentSection < 2 ? currentSection + 1 : currentSection;
+      } else {
+        // גלילה למעלה
+        nextSection = currentSection > 0 ? currentSection - 1 : currentSection;
+      }
+      
+      console.log('Scroll from section:', currentSection, 'to section:', nextSection);
+      
+      if (nextSection !== currentSection) {
+        setActiveSection(nextSection);
+      }
+      
+      // זמן נעילה קצר יותר אבל עקבי
+      setTimeout(() => {
+        isScrolling.current = false;
+      }, 600);
+    });
+  }, [activeSection]); // הוספת activeSection כ-dependency
 
-  // גלילה למיקום ספציפי על פי לחיצת קישור
-  const scrollToSection = (sectionId: number) => {
+  // גלילה למיקום ספציפי על פי לחיצת קישור - מוכן עם useCallback
+  const scrollToSection = useCallback((sectionId: number) => {
     if (isScrolling.current) return;
+    
+    console.log('Manual scroll to section:', sectionId);
+    
     isScrolling.current = true;
     
-    setTimeout(() => {
-      isScrolling.current = false;
-    }, 800);
+    // שימוש ב-requestAnimationFrame לביצועים טובים יותר
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+    }
     
-    setActiveSection(sectionId);
-  };
+    animationFrameId.current = requestAnimationFrame(() => {
+      setActiveSection(sectionId);
+      
+      setTimeout(() => {
+        isScrolling.current = false;
+      }, 600);
+    });
+  }, []);
 
-  // טיפול באירועי מגע
-  const handleTouchStart = (e: TouchEvent) => {
+  // טיפול באירועי מגע - מוכן עם useCallback
+  const handleTouchStart = useCallback((e: TouchEvent) => {
+    if (isScrolling.current) return;
     touchStartY.current = e.touches[0].clientY;
-  };
+  }, []);
   
-  const handleTouchMove = (e: TouchEvent) => {
+  const handleTouchMove = useCallback((e: TouchEvent) => {
     if (isScrolling.current) return;
     
     const touchY = e.touches[0].clientY;
     const diff = touchStartY.current - touchY;
     
+    // רגישות גבוהה יותר למגע
     if (Math.abs(diff) < 50) return;
     
     e.preventDefault();
     isScrolling.current = true;
     
-    setTimeout(() => {
-      isScrolling.current = false;
-    }, 800);
-    
-    if (diff > 0 && activeSection < 2) {
-      // גלילה למטה
-      setActiveSection(prev => prev + 1);
-    } else if (diff < 0 && activeSection > 0) {
-      // גלילה למעלה
-      setActiveSection(prev => prev - 1);
+    // שימוש ב-requestAnimationFrame לביצועים טובים יותר
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
     }
-  };
+    
+    animationFrameId.current = requestAnimationFrame(() => {
+      const currentSection = activeSection;
+      let nextSection = currentSection;
+      
+      if (diff > 0) {
+        nextSection = currentSection < 2 ? currentSection + 1 : currentSection;
+      } else {
+        nextSection = currentSection > 0 ? currentSection - 1 : currentSection;
+      }
+      
+      console.log('Touch from section:', currentSection, 'to section:', nextSection);
+      
+      if (nextSection !== currentSection) {
+        setActiveSection(nextSection);
+      }
+      
+      setTimeout(() => {
+        isScrolling.current = false;
+      }, 600);
+    });
+  }, [activeSection]);
 
-  // אירוע גלילה
+  // אירוע גלילה - עם ניקוי משופר
   useEffect(() => {
-    window.addEventListener('wheel', handleScroll as unknown as EventListener, { passive: false });
-    window.addEventListener('touchstart', handleTouchStart as unknown as EventListener);
-    window.addEventListener('touchmove', handleTouchMove as unknown as EventListener, { passive: false });
+    // ניקוי event listeners קודמים אם יש
+    const cleanup = () => {
+      window.removeEventListener('wheel', handleScroll);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchmove', handleTouchMove);
+      document.body.style.overflow = 'auto';
+      
+      // ניקוי timeouts ו-animationFrames
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+        animationFrameId.current = null;
+      }
+      
+      if (sectionTransitionTimeout.current) {
+        clearTimeout(sectionTransitionTimeout.current);
+        sectionTransitionTimeout.current = null;
+      }
+    };
+    
+    cleanup(); // ניקוי ראשוני
+    
+    // הוספת event listeners חדשים
+    window.addEventListener('wheel', handleScroll, { passive: false });
+    window.addEventListener('touchstart', handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', handleTouchMove, { passive: false });
     
     document.body.style.overflow = 'hidden';
     
+    return cleanup;
+  }, [handleScroll, handleTouchStart, handleTouchMove]);
+
+  // מעקב אחרי שינויים ב-activeSection להבטחת מעבר חלק
+  useEffect(() => {
+    console.log('Active section changed to:', activeSection);
+    
+    // ניקוי timeout קודם אם יש
+    if (sectionTransitionTimeout.current) {
+      clearTimeout(sectionTransitionTimeout.current);
+    }
+    
+    // הבטחה שהמערכת תשחרר את הנעילה אחרי זמן קבוע
+    sectionTransitionTimeout.current = setTimeout(() => {
+      if (isScrolling.current) {
+        console.log('Force releasing scroll lock');
+        isScrolling.current = false;
+      }
+    }, 1000); // timeout חירום
+    
     return () => {
-      window.removeEventListener('wheel', handleScroll as unknown as EventListener);
-      window.removeEventListener('touchstart', handleTouchStart as unknown as EventListener);
-      window.removeEventListener('touchmove', handleTouchMove as unknown as EventListener);
-      document.body.style.overflow = 'auto';
+      if (sectionTransitionTimeout.current) {
+        clearTimeout(sectionTransitionTimeout.current);
+        sectionTransitionTimeout.current = null;
+      }
     };
   }, [activeSection]);
 
@@ -777,18 +867,19 @@ export default function HomePage() {
   }
 
   return (
-    <div style={styles.container} ref={containerRef}>
+    <div className="w-full min-h-screen bg-[#f9f4f0] overflow-hidden" ref={containerRef}>
       <Navbar />
       
       {/* נקודות ניווט */}
-      <div style={styles.paginationDots}>
+      <div className="fixed right-2 top-1/2 transform -translate-y-1/2 flex flex-col gap-2 sm:gap-3 lg:gap-4 z-[100] p-1 sm:p-2 rounded-2xl sm:rounded-3xl shadow-lg bg-white/20 backdrop-blur-sm sm:right-4 lg:right-8 laptop-sm:right-3 laptop-sm:gap-2 laptop-sm:p-1.5">
         {[0, 1, 2].map((index) => (
           <motion.div
             key={index}
-            style={{
-              ...styles.paginationDot,
-              ...(activeSection === index ? styles.activeDot : {})
-            }}
+            className={`w-2.5 h-2.5 sm:w-3 sm:h-3 lg:w-4 lg:h-4 rounded-full cursor-pointer transition-all duration-300 border border-pink-500/30 ${
+              activeSection === index 
+                ? 'bg-pink-500 scale-125 shadow-lg shadow-pink-500/50' 
+                : 'bg-white/70 hover:bg-pink-200'
+            } laptop-sm:w-2.5 laptop-sm:h-2.5 laptop-md:w-3 laptop-md:h-3`}
             onClick={() => scrollToSection(index)}
             whileHover={{ scale: 1.3 }}
             whileTap={{ scale: 0.9 }}
@@ -797,37 +888,32 @@ export default function HomePage() {
       </div>
       
       {/* מיכל לכל החלקים */}
-      <div style={styles.sectionContainer}>
+      <div className="relative w-full min-h-screen overflow-hidden" style={{ minHeight: '100dvh' }}>
         {/* אזור התמונה המרכזית */}
         <motion.section
           ref={heroSectionRef}
           id="section-home"
-          style={{
-            ...styles.heroSection,
-            position: 'absolute',
-            width: '100%',
-            top: 0,
-            left: 0,
-          }}
+          className="absolute inset-0 w-full flex items-center justify-center overflow-hidden bg-[#fbf7f3] section-container"
+          style={{ minHeight: '100dvh' }}
           initial={false}
           animate={{
             y: activeSection === 0 ? 0 : '-100vh',
             opacity: activeSection === 0 ? 1 : 0
           }}
           transition={{
-            type: 'spring',
-            stiffness: 100,
-            damping: 20,
-            opacity: { duration: 0.5 }
+            type: 'tween',
+            duration: 0.6,
+            ease: [0.4, 0, 0.2, 1]
           }}
         >
           <motion.div 
-            style={styles.imageWrapper}
+            className="absolute inset-0 flex justify-center items-center overflow-hidden"
           >
             <motion.div 
+              className="absolute flex overflow-hidden gap-0.5"
               style={{
-                ...styles.backgroundSlider,
                 width: '800%', // הגדלת רוחב עבור 4 עותקים של תמונות
+                height: '100%',
               }}
               animate="animate"
               variants={sliderVariants}
@@ -837,16 +923,11 @@ export default function HomePage() {
                 (shuffledImages.length > 0 ? shuffledImages : backgroundImages).map((image, index) => (
                   <motion.div 
                     key={`group-${groupIndex}-${index}`} 
+                    className="flex-shrink-0 bg-[#fbf7f3] rounded overflow-hidden"
                     style={{ 
                       width: '2.48%', // חלוקה ל-40 תמונות (5 תמונות × 8 קבוצות)
                       height: '100%',
-                      padding: 0,
                       margin: '0 1px',
-                      backgroundColor: '#fbf7f3',
-                      borderRadius: 4,
-                      boxShadow: 'none',
-                      overflow: 'hidden',
-                      flexShrink: 0,
                     }} 
                     initial={{ opacity: 0.9 }}
                     animate={{ 
@@ -854,34 +935,10 @@ export default function HomePage() {
                       transition: { duration: 1.5 }
                     }}
                   >
-                    <div style={{
-                      width: '100%',
-                      height: '100%',
-                      backgroundColor: !imagesLoaded ? 'rgba(251, 247, 243, 0.3)' : 'rgba(251, 247, 243, 0.1)',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      overflow: 'hidden',
-                      padding: 0,
-                      margin: 0,
-                    }}>
+                    <div className="w-full h-full bg-gradient-to-br from-[#f9f4f0] to-[#fff5f8] flex justify-center items-center overflow-hidden">
                       {!imagesLoaded ? (
-                        <div style={{
-                          width: '100%',
-                          height: '100%',
-                          background: 'linear-gradient(45deg, #f9f4f0, #fff5f8)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}>
-                          <div style={{
-                            width: '20px',
-                            height: '20px',
-                            border: '2px solid #ff4081',
-                            borderTop: '2px solid transparent',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite',
-                          }} />
+                        <div className="w-full h-full bg-gradient-to-r from-[#f9f4f0] to-[#fff5f8] flex items-center justify-center">
+                          <div className="w-5 h-5 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
                         </div>
                       ) : (
                         <Image
@@ -890,7 +947,7 @@ export default function HomePage() {
                           width={1920}
                           height={1080}
                           priority={groupIndex === 0 && index === 0}
-                          style={styles.backgroundImage}
+                          className="w-full h-full object-contain object-center"
                           onLoad={() => console.log(`Image loaded: ${image}`)}
                           onError={() => console.error(`Failed to load: ${image}`)}
                         />
@@ -900,17 +957,17 @@ export default function HomePage() {
                 ))
               )}
             </motion.div>
-            <div style={styles.overlay} />
+            <div className="absolute inset-0 bg-[#fbf7f3]/20 z-[1]" />
           </motion.div>
 
           {/* תוכן ראשי מעל התמונה */}
-          <div style={styles.heroContent}>
-            <div style={styles.titleContainer}>
+          <div className="relative z-[2] text-center text-white p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 max-w-5xl flex flex-col items-center justify-center mx-auto">
+            <div className="flex flex-col items-center mb-3 sm:mb-4 md:mb-5 lg:mb-6">
               <motion.h1 
                 initial="hidden"
                 animate="visible"
                 variants={firstTitleVariants}
-                style={styles.mainTitle}
+                className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-0.5 sm:mb-1 text-shadow-lg font-[var(--font-playfair)] text-white leading-tight laptop-sm:text-5xl laptop-md:text-6xl"
               >
                Create
               </motion.h1>
@@ -918,7 +975,7 @@ export default function HomePage() {
                 initial="hidden"
                 animate="visible"
                 variants={secondTitleVariants}
-                style={styles.secondaryTitle}
+                className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-0.5 sm:mb-1 text-shadow-lg font-[var(--font-playfair)] text-white/90 leading-tight laptop-sm:text-4xl laptop-md:text-5xl"
               >
                 Plan
               </motion.h2>
@@ -926,7 +983,7 @@ export default function HomePage() {
                 initial="hidden"
                 animate="visible"
                 variants={thirdTitleVariants}
-                style={styles.tertiaryTitle}
+                className="text-xl xs:text-2xl sm:text-3xl md:text-3xl lg:text-4xl xl:text-5xl font-bold mb-4 sm:mb-6 text-shadow-lg font-[var(--font-playfair)] text-white/80 leading-tight laptop-sm:text-2xl laptop-md:text-3xl"
               >
                 Love
               </motion.h3>
@@ -936,21 +993,22 @@ export default function HomePage() {
               initial="hidden"
               animate="visible"
               variants={subtitleVariants}
-              style={styles.subtitle}
+              className="text-sm xs:text-base sm:text-lg md:text-xl lg:text-xl xl:text-2xl mb-6 sm:mb-8 lg:mb-10 text-shadow font-medium max-w-xl px-2 sm:px-4 laptop-sm:text-lg laptop-sm:mb-6"
             >
               הדרך הקלה לתכנן את החתונה המושלמת
             </motion.p>
             
-            <div style={styles.ctaButtons}>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 lg:gap-5 justify-center items-center w-full max-w-sm sm:max-w-none px-2 sm:px-0 laptop-sm:gap-3">
               <motion.div 
                 initial="hidden"
                 animate="visible"
                 variants={buttonVariants}
                 whileHover="hover"
+                className="w-full sm:w-auto"
               >
                 <Link 
                   href={user ? `/user/${user._id}` : '/login'} 
-                  style={styles.primaryButton}
+                  className="inline-block w-full sm:w-auto bg-pink-500 text-white py-2.5 xs:py-3 sm:py-3 px-5 xs:px-6 sm:px-8 rounded-full text-sm xs:text-base sm:text-lg font-bold transition-all duration-300 border-2 border-transparent shadow-lg shadow-pink-500/30 text-center hover:bg-pink-600 hover:shadow-xl laptop-sm:py-2.5 laptop-sm:px-6 laptop-sm:text-base"
                 >
                   התחל לתכנן
                 </Link>
@@ -960,10 +1018,11 @@ export default function HomePage() {
                 animate="visible"
                 variants={buttonVariants}
                 whileHover="hover"
+                className="w-full sm:w-auto"
               >
                 <Link 
                   href="#about-section" 
-                  style={styles.secondaryButton}
+                  className="inline-block w-full sm:w-auto bg-transparent text-white py-2.5 xs:py-3 sm:py-3 px-5 xs:px-6 sm:px-8 rounded-full text-sm xs:text-base sm:text-lg font-bold transition-all duration-300 border-2 border-white text-center hover:bg-white hover:text-pink-500 laptop-sm:py-2.5 laptop-sm:px-6 laptop-sm:text-base"
                   onClick={(e) => {
                     e.preventDefault();
                     scrollToSection(1);
@@ -980,15 +1039,8 @@ export default function HomePage() {
         <motion.div
           ref={aboutSectionRef}
           id="section-services"
-          style={{
-            ...styles.additionalContent,
-            position: 'absolute',
-            width: '100%',
-            top: 0,
-            left: 0,
-            height: '100vh',
-            overflow: 'auto'
-          }}
+          className="absolute inset-0 w-full overflow-auto bg-[#f9f4f0] flex flex-col justify-center py-4 sm:py-8 lg:py-16 section-container"
+          style={{ minHeight: '100dvh' }}
           initial={false}
           animate={{
             y: activeSection === 1 ? 0 : activeSection < 1 ? '100vh' : '-100vh',
@@ -996,57 +1048,50 @@ export default function HomePage() {
           }}
           transition={{
             type: 'tween',
-            duration: 0.7,
-            ease: 'easeInOut',
-            opacity: { duration: 0.5 }
+            duration: 0.6,
+            ease: [0.4, 0, 0.2, 1]
           }}
         >
-          <div style={styles.servicesSection}>
-            <div style={styles.servicesHero}></div>
-            <div style={styles.servicesContent}>
+          <div className="relative overflow-hidden bg-gradient-to-b from-[#f9f4f0] to-[#fff5f8] py-6 sm:py-12 md:py-16 lg:py-20 xl:py-24 px-3 sm:px-4 md:px-6 lg:px-8 laptop-sm:py-8 laptop-sm:px-4">
+            <div className="absolute inset-0 bg-gradient-to-br from-pink-100/10 via-transparent to-pink-200/10" />
+            <div className="relative z-2 max-w-7xl mx-auto">
               <motion.div
                 initial={{ opacity: 0, y: 30 }}
                 animate={{ opacity: activeSection === 1 ? 1 : 0, y: activeSection === 1 ? 0 : 30 }}
-                transition={{ duration: 0.7, delay: 0.2 }}
-                style={{ textAlign: 'center', marginBottom: '1.5rem' }}
+                transition={{ duration: 0.8, delay: 0.3 }}
+                className="text-center mb-4 sm:mb-6 md:mb-8 lg:mb-12 laptop-sm:mb-6"
               >
-                <h2 style={styles.sectionTitle}>
+                <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-gray-800 text-center mb-3 sm:mb-6 md:mb-8 lg:mb-12 font-[var(--font-shrikhand)] relative inline-block px-2 laptop-sm:text-3xl laptop-sm:mb-4 laptop-md:text-4xl">
                   השירותים שלנו
-                  <div style={styles.sectionTitleDecorator}></div>
+                  <div className="w-16 sm:w-20 md:w-24 xl:w-28 h-0.5 sm:h-1 bg-gradient-to-r from-pink-500 to-pink-300 mx-auto mt-2 sm:mt-4 rounded-full laptop-sm:w-16 laptop-sm:mt-2" />
                 </h2>
-                <p style={{ 
-                  fontSize: '1.3rem', 
-                  maxWidth: '800px', 
-                  margin: '2rem auto',
-                  color: '#666',
-                  lineHeight: '1.7'
-                }}>
+                <p className="text-sm xs:text-base sm:text-lg md:text-xl lg:text-2xl xl:text-3xl max-w-5xl mx-auto text-gray-600 leading-relaxed px-2 sm:px-4 md:px-6 laptop-sm:text-base laptop-sm:max-w-4xl laptop-md:text-lg">
                   אנו מספקים מגוון שירותים מקצועיים לתכנון וארגון החתונה המושלמת עבורכם, 
                   מהשלבים הראשוניים ועד הרגע המיוחד, הכל במקום אחד.
                 </p>
               </motion.div>
               
               <motion.div 
-                style={styles.servicesGrid}
+                className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 lg:gap-10 xl:gap-12 mt-4 sm:mt-6 md:mt-8 laptop-sm:gap-4 laptop-sm:mt-4"
                 variants={containerVariants}
                 initial="hidden"
-                whileInView="show"
-                viewport={{ once: true, amount: 0.2 }}
+                animate={activeSection === 1 ? "show" : "hidden"}
+                transition={{ duration: 0.8, delay: 0.5 }}
               >
                 <motion.div 
                   variants={cardVariants} 
-                  style={styles.serviceCard}
+                  className="bg-white p-3 sm:p-4 md:p-6 lg:p-8 xl:p-10 rounded-lg sm:rounded-xl shadow-lg text-center transition-all duration-400 border border-pink-100/50 hover:shadow-2xl hover:scale-105 hover:-translate-y-2 laptop-sm:p-4 laptop-md:p-6"
                   whileHover={{ 
                     scale: 1.05, 
                     boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
                     y: -10
                   }}
                 >
-                  <div style={styles.serviceCardIcon}>
+                  <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl text-pink-500 mb-2 sm:mb-4 md:mb-6 inline-block laptop-sm:text-3xl laptop-sm:mb-3 laptop-md:text-4xl">
                     <i className="fas fa-calendar-check"></i>
                   </div>
-                  <h3 style={styles.serviceCardTitle}>תכנון אירועים</h3>
-                  <p style={styles.serviceCardDesc}>ניהול מקיף של כל פרטי החתונה מא׳ ועד ת׳, כולל תיאום ספקים, לוחות זמנים וניהול תקציב.</p>
+                  <h3 className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 md:mb-4 laptop-sm:text-lg laptop-sm:mb-2 laptop-md:text-xl">תכנון אירועים</h3>
+                  <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl text-gray-600 leading-relaxed laptop-sm:text-sm laptop-md:text-base">ניהול מקיף של כל פרטי החתונה מא׳ ועד ת׳, כולל תיאום ספקים, לוחות זמנים וניהול תקציב.</p>
                 </motion.div>
                 <motion.div 
                   variants={{
@@ -1054,21 +1099,21 @@ export default function HomePage() {
                     show: { 
                       opacity: 1, 
                       y: 0, 
-                      transition: { duration: 0.5, ease: 'easeOut' } 
+                      transition: { duration: 0.6, ease: 'easeOut', delay: 0.2 } 
                     }
                   }} 
-                  style={styles.serviceCard}
+                  className="bg-white p-3 sm:p-4 md:p-6 lg:p-8 xl:p-10 rounded-lg sm:rounded-xl shadow-lg text-center transition-all duration-400 border border-pink-100/50 hover:shadow-2xl hover:scale-105 hover:-translate-y-2 laptop-sm:p-4 laptop-md:p-6"
                   whileHover={{ 
                     scale: 1.05, 
                     boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
                     y: -10
                   }}
                 >
-                  <div style={styles.serviceCardIcon}>
+                  <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl text-pink-500 mb-2 sm:mb-4 md:mb-6 inline-block laptop-sm:text-3xl laptop-sm:mb-3 laptop-md:text-4xl">
                     <i className="fas fa-handshake"></i>
                   </div>
-                  <h3 style={styles.serviceCardTitle}>ספקים מומלצים</h3>
-                  <p style={styles.serviceCardDesc}>רשימת ספקים מובחרת ומומלצת, כולל ביקורות, מחירים והשוואה קלה ונוחה ביניהם.</p>
+                  <h3 className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 md:mb-4 laptop-sm:text-lg laptop-sm:mb-2 laptop-md:text-xl">ספקים מומלצים</h3>
+                  <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl text-gray-600 leading-relaxed laptop-sm:text-sm laptop-md:text-base">רשימת ספקים מובחרת ומומלצת, כולל ביקורות, מחירים והשוואה קלה ונוחה ביניהם.</p>
                 </motion.div>
                 <motion.div 
                   variants={{
@@ -1076,21 +1121,21 @@ export default function HomePage() {
                     show: { 
                       opacity: 1, 
                       x: 0, 
-                      transition: { duration: 0.5, ease: 'easeOut' } 
+                      transition: { duration: 0.6, ease: 'easeOut', delay: 0.4 } 
                     }
                   }} 
-                  style={styles.serviceCard}
+                  className="bg-white p-3 sm:p-4 md:p-6 lg:p-8 xl:p-10 rounded-lg sm:rounded-xl shadow-lg text-center transition-all duration-400 border border-pink-100/50 hover:shadow-2xl hover:scale-105 hover:-translate-y-2 md:col-span-2 lg:col-span-1 laptop-sm:p-4 laptop-md:p-6"
                   whileHover={{ 
                     scale: 1.05, 
                     boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
                     y: -10
                   }}
                 >
-                  <div style={styles.serviceCardIcon}>
+                  <div className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl text-pink-500 mb-2 sm:mb-4 md:mb-6 inline-block laptop-sm:text-3xl laptop-sm:mb-3 laptop-md:text-4xl">
                     <i className="fas fa-coins"></i>
                   </div>
-                  <h3 style={styles.serviceCardTitle}>ניהול תקציב</h3>
-                  <p style={styles.serviceCardDesc}>כלים לניהול וחישוב התקציב, מעקב אחר הוצאות, התראות ומערכת תשלומים חכמה.</p>
+                  <h3 className="text-sm sm:text-lg md:text-xl lg:text-2xl xl:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 md:mb-4 laptop-sm:text-lg laptop-sm:mb-2 laptop-md:text-xl">ניהול תקציב</h3>
+                  <p className="text-xs sm:text-sm md:text-base lg:text-lg xl:text-xl text-gray-600 leading-relaxed laptop-sm:text-sm laptop-md:text-base">כלים לניהול וחישוב התקציב, מעקב אחר הוצאות, התראות ומערכת תשלומים חכמה.</p>
                 </motion.div>
               </motion.div>
             </div>
@@ -1101,122 +1146,104 @@ export default function HomePage() {
         <motion.div
           ref={contactSectionRef}
           id="section-contact"
-          style={{
-            ...styles.contactSection,
-            position: 'absolute',
-            width: '100%',
-            top: 0,
-            left: 0,
-            zIndex: 1000,
-          }}
+          className="absolute inset-0 w-full bg-[#f6f1ec] flex flex-col justify-center py-4 sm:py-6 md:py-8 lg:py-10 xl:py-12 px-3 sm:px-4 md:px-6 lg:px-8 z-[1000] overflow-auto section-container laptop-sm:py-6 laptop-sm:px-4"
+          style={{ minHeight: '100dvh' }}
           initial={false}
           animate={{
             y: activeSection === 2 ? 0 : '100vh',
             opacity: activeSection === 2 ? 1 : 0
           }}
           transition={{
-            type: 'spring',
-            stiffness: 100,
-            damping: 20,
-            opacity: { duration: 0.5 }
+            type: 'tween',
+            duration: 0.6,
+            ease: [0.4, 0, 0.2, 1]
           }}
         >
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>צור קשר</h2>
-            <div style={styles.contactForm}>
-              <form onSubmit={handleSubmit}>
-                <div style={styles.formGroup}>
-                  <label htmlFor="name" style={styles.formLabel}>שם מלא</label>
-                  <input 
-                    id="name"
-                    type="text" 
-                    name="name"
-                    value={formData.name}
-                    onChange={handleInputChange}
-                    style={styles.formInput} 
-                    placeholder="הזן את שמך המלא" 
-                    required
-                  />
+          <section className="max-w-4xl xl:max-w-5xl mx-auto w-full laptop-sm:max-w-3xl">
+            <h2 className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl text-gray-800 text-center mb-4 sm:mb-6 md:mb-8 lg:mb-10 xl:mb-12 font-[var(--font-shrikhand)] relative inline-block w-full laptop-sm:text-3xl laptop-sm:mb-4 laptop-md:text-4xl">
+              צור קשר
+              <div className="w-16 sm:w-20 md:w-24 xl:w-28 h-0.5 sm:h-1 bg-gradient-to-r from-pink-500 to-pink-300 mx-auto mt-2 sm:mt-4 rounded-full laptop-sm:w-16 laptop-sm:mt-2" />
+            </h2>
+            <div className="w-full max-w-4xl xl:max-w-5xl mx-auto bg-white p-4 sm:p-6 md:p-8 lg:p-10 xl:p-12 rounded-lg shadow-lg laptop-sm:max-w-3xl laptop-sm:p-5 laptop-md:p-6">
+              <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6 md:space-y-8 laptop-sm:space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8 laptop-sm:gap-4">
+                  <div>
+                    <label htmlFor="name" className="block text-sm md:text-base font-bold text-gray-800 mb-1 sm:mb-2 laptop-sm:text-sm laptop-sm:mb-1">שם מלא</label>
+                    <input 
+                      id="name"
+                      type="text" 
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      className="w-full p-2.5 sm:p-3 md:p-4 lg:p-5 border border-gray-300 rounded-md text-sm sm:text-base md:text-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all laptop-sm:p-2.5 laptop-sm:text-sm laptop-md:p-3 laptop-md:text-base" 
+                      placeholder="הזן את שמך המלא" 
+                      required
+                    />
+                  </div>
+                  
+                  <div>
+                    <label htmlFor="email" className="block text-sm md:text-base font-bold text-gray-800 mb-1 sm:mb-2 laptop-sm:text-sm laptop-sm:mb-1">כתובת אימייל</label>
+                    <input 
+                      id="email"
+                      type="email" 
+                      name="email"
+                      value={formData.email}
+                      onChange={handleInputChange}
+                      className="w-full p-2.5 sm:p-3 md:p-4 lg:p-5 border border-gray-300 rounded-md text-sm sm:text-base md:text-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all laptop-sm:p-2.5 laptop-sm:text-sm laptop-md:p-3 laptop-md:text-base" 
+                      placeholder="הזן את כתובת האימייל שלך" 
+                      required
+                    />
+                  </div>
                 </div>
                 
-                <div style={styles.formGroup}>
-                  <label htmlFor="email" style={styles.formLabel}>כתובת אימייל</label>
-                  <input 
-                    id="email"
-                    type="email" 
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    style={styles.formInput} 
-                    placeholder="הזן את כתובת האימייל שלך" 
-                    required
-                  />
-                </div>
-                
-                <div style={styles.formGroup}>
-                  <label htmlFor="phone" style={styles.formLabel}>מספר טלפון</label>
+                <div>
+                  <label htmlFor="phone" className="block text-sm md:text-base font-bold text-gray-800 mb-1 sm:mb-2 laptop-sm:text-sm laptop-sm:mb-1">מספר טלפון</label>
                   <input 
                     id="phone"
                     type="tel" 
                     name="phone"
                     value={formData.phone}
                     onChange={handleInputChange}
-                    style={styles.formInput} 
+                    className="w-full p-2.5 sm:p-3 md:p-4 lg:p-5 border border-gray-300 rounded-md text-sm sm:text-base md:text-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all laptop-sm:p-2.5 laptop-sm:text-sm laptop-md:p-3 laptop-md:text-base" 
                     placeholder="הזן את מספר הטלפון שלך" 
                   />
                 </div>
                 
-                <div style={styles.formGroup}>
-                  <label htmlFor="message" style={styles.formLabel}>הודעה</label>
+                <div>
+                  <label htmlFor="message" className="block text-sm md:text-base font-bold text-gray-800 mb-1 sm:mb-2 laptop-sm:text-sm laptop-sm:mb-1">הודעה</label>
                   <textarea 
                     id="message"
                     name="message"
                     value={formData.message}
                     onChange={handleInputChange}
-                    style={styles.formTextarea} 
+                    className="w-full p-2.5 sm:p-3 md:p-4 lg:p-5 border border-gray-300 rounded-md text-sm sm:text-base md:text-lg min-h-[100px] sm:min-h-[120px] md:min-h-[140px] lg:min-h-[160px] xl:min-h-[180px] resize-vertical focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all laptop-sm:p-2.5 laptop-sm:text-sm laptop-sm:min-h-[100px] laptop-md:p-3 laptop-md:text-base laptop-md:min-h-[120px]" 
                     placeholder="כתוב את הודעתך כאן..."
                     required
-                  ></textarea>
+                  />
                 </div>
                 
                 {formStatus.isSuccess && (
-                  <div style={{ 
-                    padding: '10px', 
-                    backgroundColor: '#d4edda', 
-                    color: '#155724',
-                    borderRadius: '4px',
-                    marginBottom: '1rem'
-                  }}>
+                  <div className="p-3 sm:p-4 md:p-5 bg-green-100 text-green-800 rounded-md border border-green-300 text-sm sm:text-base md:text-lg laptop-sm:p-3 laptop-sm:text-sm laptop-md:text-base">
                     ההודעה נשלחה בהצלחה!
                   </div>
                 )}
                 
                 {formStatus.isError && (
-                  <div style={{ 
-                    padding: '10px', 
-                    backgroundColor: '#f8d7da', 
-                    color: '#721c24',
-                    borderRadius: '4px',
-                    marginBottom: '1rem'
-                  }}>
+                  <div className="p-3 sm:p-4 md:p-5 bg-red-100 text-red-800 rounded-md border border-red-300 text-sm sm:text-base md:text-lg laptop-sm:p-3 laptop-sm:text-sm laptop-md:text-base">
                     {formStatus.errorMessage}
                   </div>
                 )}
                 
                 <motion.button 
                   type="submit" 
-                  style={{
-                    ...styles.submitButton,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '0.5rem'
-                  }}
+                  className="w-full bg-pink-500 text-white py-2.5 sm:py-3 md:py-4 lg:py-5 px-4 sm:px-6 md:px-8 rounded-full text-sm sm:text-base md:text-lg lg:text-xl font-bold border-none cursor-pointer transition-all duration-300 shadow-lg shadow-pink-500/30 flex items-center justify-center gap-2 sm:gap-3 hover:bg-pink-600 hover:shadow-xl disabled:opacity-70 disabled:cursor-not-allowed laptop-sm:py-2.5 laptop-sm:px-4 laptop-sm:text-sm laptop-md:py-3 laptop-md:text-base"
                   whileHover={{ scale: formStatus.isSubmitting ? 1 : 1.05 }}
                   whileTap={{ scale: formStatus.isSubmitting ? 1 : 0.95 }}
                   disabled={formStatus.isSubmitting}
                 >
-                  {formStatus.isSubmitting && <div className="loader"></div>}
+                  {formStatus.isSubmitting && (
+                    <div className="w-4 sm:w-5 md:w-6 h-4 sm:h-5 md:h-6 border-2 border-white/30 border-t-white rounded-full animate-spin laptop-sm:w-4 laptop-sm:h-4 laptop-md:w-5 laptop-md:h-5" />
+                  )}
                   {formStatus.isSubmitting ? 'שולח...' : 'שלח הודעה'}
                 </motion.button>
               </form>
@@ -1224,8 +1251,30 @@ export default function HomePage() {
           </section>
         </motion.div>
       </div>
+      
       {/* הוספת סגנון גלובלי */}
-      <style dangerouslySetInnerHTML={{ __html: globalStyles }} />
+      <style dangerouslySetInnerHTML={{ 
+        __html: `
+          @keyframes loaderSpin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+          
+          .text-shadow {
+            text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+          }
+          
+          .text-shadow-lg {
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+          }
+          
+          @keyframes spin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        ` 
+      }} />
     </div>
   );
 }

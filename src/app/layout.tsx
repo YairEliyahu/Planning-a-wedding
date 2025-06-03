@@ -1,7 +1,6 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter, Pacifico, Shrikhand, Heebo } from 'next/font/google';
-import Navbar from '../components/Navbar'; // ייבוא ה-Navbar
 import { AuthProvider } from '@/contexts/AuthContext';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import { Toaster } from 'react-hot-toast';
@@ -37,6 +36,13 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: 'Wedding Planner',
   description: 'כלי מקיף לתכנון חתונה מושלמת - נהלו את האורחים, הספקים, והתקציב שלכם בצורה קלה ואינטואיטיבית.',
+  viewport: {
+    width: 'device-width',
+    initialScale: 1,
+    maximumScale: 5,
+    userScalable: true,
+    viewportFit: 'cover',
+  },
   icons: {
     icon: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
     shortcut: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
@@ -53,7 +59,6 @@ export default function RootLayout({
     <html lang="he" dir="rtl" className={`${inter.variable} ${pacifico.variable} ${shrikhand.variable} ${heebo.variable}`}>
       <body style={{ margin: 0, padding: 0 }}>
         <AuthProvider>
-          <Navbar />
           <AnimatePresence mode="wait">
             {children}
           </AnimatePresence>
