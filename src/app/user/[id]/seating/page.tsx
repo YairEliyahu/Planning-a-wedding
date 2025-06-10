@@ -2,14 +2,33 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useParams } from 'next/navigation';
 
 interface Guest {
-  id: string;
+  _id: string;
+  userId: string;
   name: string;
-  status: 'confirmed' | 'declined' | 'pending';
+  phoneNumber?: string;
+  numberOfGuests: number;
+  side: 'חתן' | 'כלה' | 'משותף';
+  isConfirmed: boolean | null;
+  notes: string;
+  group?: string;
   tableId?: string;
   seatNumber?: number;
   specialNeeds?: string;
+}
+
+interface ApiGuest {
+  _id: string;
+  userId: string;
+  name: string;
+  phoneNumber?: string;
+  numberOfGuests: number;
+  side: 'חתן' | 'כלה' | 'משותף';
+  isConfirmed: boolean | null;
+  notes: string;
+  group?: string;
 }
 
 interface Table {
@@ -30,6 +49,9 @@ interface EventSetupData {
 }
 
 export default function SeatingArrangements() {
+  const params = useParams();
+  const userId = params.id as string;
+  
   const [tables, setTables] = useState<Table[]>([]);
   const [unassignedGuests, setUnassignedGuests] = useState<Guest[]>([]);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
@@ -39,36 +61,62 @@ export default function SeatingArrangements() {
   const [showEventSetupModal, setShowEventSetupModal] = useState(false);
   const [boardDimensions, setBoardDimensions] = useState({ width: 700, height: 600 });
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+  const [showTableDetailModal, setShowTableDetailModal] = useState(false);
+  const [selectedTableForDetail, setSelectedTableForDetail] = useState<Table | null>(null);
 
-  // Mock data for development
+  // Fetch real guest data
   useEffect(() => {
-    // Simulate loading data
-    setTimeout(() => {
-      const mockGuests: Guest[] = [
-        { id: '1', name: 'יוסי כהן', status: 'confirmed' },
-        { id: '2', name: 'רחל לוי', status: 'confirmed' },
-        { id: '3', name: 'דוד שמואל', status: 'confirmed' },
-        { id: '4', name: 'שרה מלכה', status: 'confirmed' },
-        { id: '5', name: 'אבי ניסן', status: 'confirmed' },
-        { id: '6', name: 'מירב דוד', status: 'confirmed' },
-        { id: '7', name: 'משה ברוך', status: 'confirmed' },
-        { id: '8', name: 'נעה יוסף', status: 'confirmed' },
-      ];
-
-      const mockTables: Table[] = [
-        // Start with empty tables - user will use smart setup
-      ];
-
-      setTables(mockTables);
-      setUnassignedGuests(mockGuests);
-      setIsLoading(false);
-      
-      // Show event setup modal if no tables exist
-      if (mockTables.length === 0) {
-        setShowEventSetupModal(true);
+    const fetchGuests = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch(`/api/guests?userId=${userId}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch guests');
+        }
+        
+        const data = await response.json();
+        
+        if (data.success && data.guests) {
+          // Transform guest data to match our interface - show ALL guests with status
+          const transformedGuests: Guest[] = data.guests
+            .map((guest: ApiGuest) => ({
+              _id: guest._id,
+              userId: guest.userId,
+              name: guest.name,
+              phoneNumber: guest.phoneNumber,
+              numberOfGuests: guest.numberOfGuests || 1,
+              side: guest.side,
+              isConfirmed: guest.isConfirmed,
+              notes: guest.notes || '',
+              group: guest.group,
+            }));
+          
+          setUnassignedGuests(transformedGuests);
+          console.log(`Loaded ${transformedGuests.length} total guests`);
+        } else {
+          console.log('No guests found or API error');
+          setUnassignedGuests([]);
+        }
+      } catch (error) {
+        console.error('Error fetching guests:', error);
+        setUnassignedGuests([]);
+      } finally {
+        setIsLoading(false);
+        
+        // Show event setup modal if no tables exist and guests are loaded
+        setTimeout(() => {
+          if (tables.length === 0) {
+            setShowEventSetupModal(true);
+          }
+        }, 500);
       }
-    }, 1000);
-  }, []);
+    };
+
+    if (userId) {
+      fetchGuests();
+    }
+  }, [userId, tables.length]);
 
   const addNewTable = () => {
     const newTable: Table = {
@@ -85,6 +133,11 @@ export default function SeatingArrangements() {
   };
 
   const assignGuestToTable = (guest: Guest, table: Table) => {
+    if (!guest.isConfirmed) {
+      alert('ניתן להושיב רק אורחים שאישרו הגעה!');
+      return;
+    }
+    
     if (table.guests.length >= table.capacity) {
       alert('השולחן מלא! לא ניתן להוסיף עוד אורחים');
       return;
@@ -93,7 +146,7 @@ export default function SeatingArrangements() {
     // Remove guest from current table
     const updatedTables = tables.map(t => ({
       ...t,
-      guests: t.guests.filter(g => g.id !== guest.id)
+      guests: t.guests.filter(g => g._id !== guest._id)
     }));
 
     // Add guest to new table
@@ -105,13 +158,13 @@ export default function SeatingArrangements() {
     setTables(updatedTables);
 
     // Update unassigned guests
-    setUnassignedGuests(prev => prev.filter(g => g.id !== guest.id));
+    setUnassignedGuests(prev => prev.filter(g => g._id !== guest._id));
   };
 
   const removeGuestFromTable = (guest: Guest) => {
     const updatedTables = tables.map(table => ({
       ...table,
-      guests: table.guests.filter(g => g.id !== guest.id)
+      guests: table.guests.filter(g => g._id !== guest._id)
     }));
     setTables(updatedTables);
     setUnassignedGuests(prev => [...prev, { ...guest, tableId: undefined }]);
@@ -258,12 +311,74 @@ export default function SeatingArrangements() {
     setUnassignedGuests(allGuests);
   };
 
+  // Function to get guest status display info
+  const getGuestStatusInfo = (guest: Guest) => {
+    if (guest.isConfirmed === true) {
+      return {
+        text: 'מאושר',
+        emoji: '✅',
+        color: 'text-green-600',
+        bgColor: 'bg-green-50',
+        borderColor: 'border-green-200'
+      };
+    } else if (guest.isConfirmed === false) {
+      return {
+        text: 'סירב',
+        emoji: '❌',
+        color: 'text-red-600',
+        bgColor: 'bg-red-50',
+        borderColor: 'border-red-200'
+      };
+    } else {
+      return {
+        text: 'ממתין',
+        emoji: '⏳',
+        color: 'text-orange-600',
+        bgColor: 'bg-orange-50',
+        borderColor: 'border-orange-200'
+      };
+    }
+  };
+
+  // Get available groups from confirmed guests
+  const getAvailableGroups = () => {
+    const confirmedGuests = unassignedGuests.filter(g => g.isConfirmed === true);
+    const groups = confirmedGuests.map(g => g.group).filter(Boolean) as string[];
+    return Array.from(new Set(groups)).sort();
+  };
+
+  // Get guests by side and group
+  const getGuestsBySideAndGroup = (side: string, group: string) => {
+    return unassignedGuests.filter(g => 
+      g.isConfirmed === true && 
+      g.side === side && 
+      g.group === group
+    );
+  };
+
+  // Auto-fill table with guests from specific category
+  const autoFillTableByCategory = (table: Table, side: string, group: string, count: number) => {
+    const availableGuests = getGuestsBySideAndGroup(side, group);
+    const guestsToAdd = availableGuests.slice(0, Math.min(count, table.capacity - table.guests.length));
+    
+    guestsToAdd.forEach(guest => {
+      assignGuestToTable(guest, table);
+    });
+  };
+
+  // Open table detail modal
+  const openTableDetail = (table: Table) => {
+    setSelectedTableForDetail(table);
+    setShowTableDetailModal(true);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-[var(--font-heebo)]">טוען סידורי הושבה...</p>
+          <p className="mt-4 text-gray-600 font-[var(--font-heebo)]">טוען את רשימת האורחים...</p>
+          <p className="mt-2 text-sm text-gray-500 font-[var(--font-heebo)]">מסנכרן עם מסד הנתונים</p>
         </div>
       </div>
     );
@@ -314,36 +429,70 @@ export default function SeatingArrangements() {
           <div className="lg:col-span-1 order-2 lg:order-1">
             <div className="bg-white rounded-lg shadow-md p-4 lg:p-6">
               <h3 className="text-lg font-bold text-gray-800 mb-4 font-[var(--font-heebo)]">
-                אורחים ללא שולחן ({unassignedGuests.length})
+                כל האורחים ({unassignedGuests.length})
+                <div className="text-sm font-normal text-gray-600 mt-1">
+                  {unassignedGuests.filter(g => g.isConfirmed === true).length} מאושרים • {' '}
+                  {unassignedGuests.filter(g => g.isConfirmed === false).length} סירבו • {' '}
+                  {unassignedGuests.filter(g => g.isConfirmed === null).length} ממתינים
+                </div>
               </h3>
               
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {unassignedGuests.map((guest) => (
-                  <div
-                    key={guest.id}
-                    className="p-3 bg-gray-50 rounded-lg border border-gray-200 cursor-move"
-                    draggable
-                    onDragStart={(e: React.DragEvent) => {
-                      e.dataTransfer.setData('application/json', JSON.stringify(guest));
-                    }}
-                  >
-                    <motion.div
-                      initial={{ opacity: 0, x: -20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="flex items-center gap-2"
+                {unassignedGuests.map((guest) => {
+                  const statusInfo = getGuestStatusInfo(guest);
+                  const isAssignable = guest.isConfirmed === true;
+                  
+                  return (
+                    <div
+                      key={guest._id}
+                      className={`p-3 rounded-lg border transition-colors ${statusInfo.bgColor} ${statusInfo.borderColor} ${
+                        isAssignable ? 'cursor-move hover:bg-opacity-80' : 'cursor-not-allowed opacity-75'
+                      }`}
+                      draggable={isAssignable}
+                      onDragStart={(e: React.DragEvent) => {
+                        if (isAssignable) {
+                          e.dataTransfer.setData('application/json', JSON.stringify(guest));
+                        } else {
+                          e.preventDefault();
+                        }
+                      }}
                     >
-                      <span className="text-gray-600">👤</span>
-                      <span className="font-medium font-[var(--font-heebo)]">{guest.name}</span>
-                    </motion.div>
-                    <div className="text-xs text-gray-500 font-[var(--font-heebo)]">
-                      גרור לשולחן או לחץ כדי להקצות
+                      <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-2"
+                      >
+                        <span className="text-gray-600">👤</span>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium font-[var(--font-heebo)] block">{guest.name}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${statusInfo.color} ${statusInfo.bgColor} border ${statusInfo.borderColor}`}>
+                              {statusInfo.emoji} {statusInfo.text}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 font-[var(--font-heebo)] flex gap-2 mt-1">
+                            <span>{guest.side}</span>
+                            {guest.group && (
+                              <span>• {guest.group}</span>
+                            )}
+                            {guest.numberOfGuests > 1 && (
+                              <span>• {guest.numberOfGuests} אורחים</span>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                      <div className="text-xs text-gray-400 mt-1 font-[var(--font-heebo)]">
+                        {isAssignable ? 'גרור לשולחן או לחץ כדי להקצות' : 'ניתן להושיב רק אורחים מאושרים'}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 
                 {unassignedGuests.length === 0 && (
                   <div className="text-center py-8 text-gray-500 font-[var(--font-heebo)]">
-                    כל האורחים הוקצו לשולחנות
+                    <div className="text-4xl mb-2">👥</div>
+                    <p className="mb-2">אין אורחים ברשימה</p>
+                    <p className="text-xs">נטען מסד הנתונים...</p>
                   </div>
                 )}
               </div>
@@ -391,6 +540,7 @@ export default function SeatingArrangements() {
                         cursor: draggedTable?.id === table.id ? 'grabbing' : 'grab',
                       }}
                       onClick={() => setSelectedTable(table)}
+                      onDoubleClick={() => openTableDetail(table)}
                       onMouseDown={(e) => {
                         // Prevent event propagation to avoid board movement
                         e.stopPropagation();
@@ -509,7 +659,7 @@ export default function SeatingArrangements() {
                           
                           return (
                             <button
-                              key={guest.id}
+                              key={guest._id}
                               className={`absolute w-8 h-8 rounded-full flex items-center justify-center text-xs cursor-pointer transition-all duration-200 ${
                                 table.capacity > 16 ? 'bg-amber-500 hover:bg-amber-600 text-white' : 'bg-blue-500 hover:bg-blue-600 text-white'
                               } ${draggedTable?.id === table.id ? 'scale-110 animate-pulse' : 'hover:scale-110'}`}
@@ -543,7 +693,7 @@ export default function SeatingArrangements() {
                         >
                           🎯 הגדרת אירוע חכמה
                         </button>
-                        <p className="text-sm text-gray-400 mt-4">או השתמשו ב"הוסף שולחן" ליצירה ידנית</p>
+                        <p className="text-sm text-gray-400 mt-4">או השתמשו ב&ldquo;הוסף שולחן&rdquo; ליצירה ידנית</p>
                       </div>
                     </div>
                   )}
@@ -559,7 +709,7 @@ export default function SeatingArrangements() {
                     </div>
                   ) : (
                     <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-[var(--font-heebo)]">
-                      💡 גררו שולחנות להזזתם • גררו אורחים מהרשימה לשולחנות • לחצו על שולחן לפרטים
+                      💡 גררו שולחנות להזזתם • גררו אורחים מהרשימה לשולחנות • לחיצה כפולה על שולחן להדמייה מפורטת
                     </div>
                   )}
                 </div>
@@ -598,7 +748,7 @@ export default function SeatingArrangements() {
                 </h4>
                 <div className="space-y-1">
                   {selectedTable.guests.map((guest) => (
-                    <div key={guest.id} className="flex items-center justify-between text-sm">
+                    <div key={guest._id} className="flex items-center justify-between text-sm">
                       <span className="font-[var(--font-heebo)]">{guest.name}</span>
                       <button
                         onClick={() => removeGuestFromTable(guest)}
@@ -621,7 +771,7 @@ export default function SeatingArrangements() {
         )}
 
         {/* Statistics */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
             <div className="text-2xl font-bold text-blue-600">{tables.length}</div>
             <div className="text-gray-600 font-[var(--font-heebo)]">שולחנות</div>
@@ -631,19 +781,28 @@ export default function SeatingArrangements() {
             <div className="text-2xl font-bold text-green-600">
               {tables.reduce((sum, table) => sum + table.guests.length, 0)}
             </div>
-            <div className="text-gray-600 font-[var(--font-heebo)]">אורחים מוקצים</div>
+            <div className="text-gray-600 font-[var(--font-heebo)]">אורחים מושבים</div>
           </div>
           
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
-            <div className="text-2xl font-bold text-orange-600">{unassignedGuests.length}</div>
-            <div className="text-gray-600 font-[var(--font-heebo)]">ללא שולחן</div>
+            <div className="text-2xl font-bold text-orange-600">
+              {unassignedGuests.filter(g => g.isConfirmed === true).length}
+            </div>
+            <div className="text-gray-600 font-[var(--font-heebo)]">מאושרים ללא שולחן</div>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow-md p-4 text-center">
+            <div className="text-2xl font-bold text-red-600">
+              {unassignedGuests.filter(g => g.isConfirmed === false).length}
+            </div>
+            <div className="text-gray-600 font-[var(--font-heebo)]">סירבו</div>
           </div>
           
           <div className="bg-white rounded-lg shadow-md p-4 text-center">
             <div className="text-2xl font-bold text-purple-600">
-              {tables.reduce((sum, table) => sum + table.capacity, 0)}
+              {unassignedGuests.filter(g => g.isConfirmed === null).length}
             </div>
-            <div className="text-gray-600 font-[var(--font-heebo)]">סה״כ מקומות</div>
+            <div className="text-gray-600 font-[var(--font-heebo)]">ממתינים לתשובה</div>
           </div>
         </div>
       </div>
@@ -690,7 +849,6 @@ export default function SeatingArrangements() {
                       name="guestCount" 
                       type="number" 
                       min="1" 
-                      max="500" 
                       required 
                       placeholder="הזינו מספר אורחים" 
                       className="w-full p-2 border border-gray-300 rounded-lg font-[var(--font-heebo)]"
@@ -896,6 +1054,223 @@ export default function SeatingArrangements() {
                   className="flex-1 bg-gray-300 text-gray-700 py-3 rounded-lg font-medium hover:bg-gray-400 transition-colors font-[var(--font-heebo)]"
                 >
                   ביטול
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Table Detail Modal - Advanced Seating Visualization */}
+      <AnimatePresence>
+        {showTableDetailModal && selectedTableForDetail && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 p-6 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-2xl font-bold text-gray-800 font-[var(--font-heebo)]">
+                  🪑 הדמיית {selectedTableForDetail.name}
+                </h3>
+                <button
+                  onClick={() => setShowTableDetailModal(false)}
+                  className="text-gray-500 hover:text-gray-700 text-2xl"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Table Visualization */}
+                <div className="bg-gray-50 rounded-lg p-6">
+                  <h4 className="text-lg font-bold mb-4 text-center font-[var(--font-heebo)]">
+                    הדמיית השולחן ({selectedTableForDetail.guests.length}/{selectedTableForDetail.capacity})
+                  </h4>
+                  
+                  <div className="relative flex items-center justify-center">
+                    {/* Table Shape */}
+                    <div 
+                      className={`relative ${
+                        selectedTableForDetail.shape === 'round' ? 'rounded-full' : 'rounded-lg'
+                      } bg-gradient-to-br from-amber-100 to-amber-200 border-4 border-amber-400 shadow-lg`}
+                      style={{
+                        width: selectedTableForDetail.capacity > 16 ? '280px' : '240px',
+                        height: selectedTableForDetail.shape === 'round' ? 
+                          (selectedTableForDetail.capacity > 16 ? '280px' : '240px') : 
+                          (selectedTableForDetail.capacity > 16 ? '180px' : '160px')
+                      }}
+                    >
+                      {/* Table Name in Center */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-center">
+                          <div className="font-bold text-lg text-amber-800 font-[var(--font-heebo)]">
+                            {selectedTableForDetail.name}
+                          </div>
+                          <div className="text-sm text-amber-600 font-[var(--font-heebo)]">
+                            {selectedTableForDetail.capacity} מקומות
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Seats around the table */}
+                      {Array.from({ length: selectedTableForDetail.capacity }).map((_, seatIndex) => {
+                        const angle = (seatIndex / selectedTableForDetail.capacity) * 2 * Math.PI;
+                        const radius = selectedTableForDetail.shape === 'round' ? 
+                          (selectedTableForDetail.capacity > 16 ? 160 : 140) : 
+                          (selectedTableForDetail.capacity > 16 ? 120 : 100);
+                        const x = Math.cos(angle) * radius;
+                        const y = Math.sin(angle) * radius;
+                        
+                        const guestAtSeat = selectedTableForDetail.guests.find(g => g.seatNumber === seatIndex + 1) || 
+                                           selectedTableForDetail.guests[seatIndex];
+                        
+                        return (
+                          <div
+                            key={seatIndex}
+                            className={`absolute w-12 h-12 rounded-full flex items-center justify-center text-xs font-bold border-2 cursor-pointer transition-all duration-200 ${
+                              guestAtSeat 
+                                ? 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600' 
+                                : 'bg-gray-200 text-gray-500 border-gray-300 hover:bg-gray-300'
+                            }`}
+                            style={{
+                              left: `calc(50% + ${x}px - 24px)`,
+                              top: `calc(50% + ${y}px - 24px)`,
+                            }}
+                            title={guestAtSeat ? `${guestAtSeat.name} (${guestAtSeat.side})` : `מקום ${seatIndex + 1} - פנוי`}
+                            onClick={() => {
+                              if (guestAtSeat) {
+                                removeGuestFromTable(guestAtSeat);
+                              }
+                            }}
+                          >
+                            {guestAtSeat ? '👤' : (seatIndex + 1)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Auto-Fill Controls */}
+                <div className="space-y-4">
+                  <h4 className="text-lg font-bold font-[var(--font-heebo)]">
+                    🎯 מילוי אוטומטי לפי קטגוריה
+                  </h4>
+                  
+                  {getAvailableGroups().length > 0 ? (
+                    <div className="space-y-4">
+                      {/* Side Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2 font-[var(--font-heebo)]">
+                          בחרו צד:
+                        </label>
+                        <div className="grid grid-cols-3 gap-2">
+                          {['חתן', 'כלה', 'משותף'].map(side => (
+                            <button
+                              key={side}
+                              className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors font-[var(--font-heebo)] text-sm"
+                              onClick={() => {
+                                // This will be used for filtering
+                              }}
+                            >
+                              {side}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Group Selection */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2 font-[var(--font-heebo)]">
+                          בחרו קבוצה:
+                        </label>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {getAvailableGroups().map(group => (
+                            <div key={group} className="border rounded-lg p-3">
+                              <div className="flex justify-between items-center">
+                                <span className="font-medium font-[var(--font-heebo)]">{group}</span>
+                              </div>
+                              
+                              {/* Show available guests by side */}
+                              <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                                {['חתן', 'כלה', 'משותף'].map(side => {
+                                  const count = getGuestsBySideAndGroup(side, group).length;
+                                  return (
+                                    <button
+                                      key={`${group}-${side}`}
+                                      className={`px-2 py-1 rounded ${
+                                        count > 0 
+                                          ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                          : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                                      } font-[var(--font-heebo)]`}
+                                      disabled={count === 0}
+                                      onClick={() => {
+                                        if (count > 0) {
+                                          const availableSeats = selectedTableForDetail.capacity - selectedTableForDetail.guests.length;
+                                          const guestsToAdd = Math.min(count, availableSeats);
+                                          autoFillTableByCategory(selectedTableForDetail, side, group, guestsToAdd);
+                                        }
+                                      }}
+                                    >
+                                      {side}: {count}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500 font-[var(--font-heebo)]">
+                      <div className="text-4xl mb-2">📝</div>
+                      <p>אין קבוצות זמינות</p>
+                      <p className="text-xs mt-1">הוסיפו קבוצות לאורחים במסד הנתונים</p>
+                    </div>
+                  )}
+
+                  {/* Current Guests List */}
+                  <div className="border-t pt-4">
+                    <h5 className="font-medium mb-3 font-[var(--font-heebo)]">
+                      אורחים בשולחן ({selectedTableForDetail.guests.length}):
+                    </h5>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {selectedTableForDetail.guests.map((guest, index) => (
+                        <div key={guest._id} className="flex items-center justify-between text-sm bg-gray-50 p-2 rounded">
+                          <div className="font-[var(--font-heebo)]">
+                            <span className="font-medium">{guest.name}</span>
+                            <span className="text-gray-500 text-xs ml-2">
+                              {guest.side}{guest.group && ` • ${guest.group}`}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => removeGuestFromTable(guest)}
+                            className="text-red-500 hover:text-red-700 text-xs"
+                          >
+                            הסר
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={() => setShowTableDetailModal(false)}
+                  className="px-6 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors font-[var(--font-heebo)]"
+                >
+                  סגור
                 </button>
               </div>
             </motion.div>

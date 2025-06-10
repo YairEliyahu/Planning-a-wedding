@@ -9,6 +9,7 @@ interface IGuestDocument extends mongoose.Document {
   side: 'חתן' | 'כלה' | 'משותף';
   isConfirmed: boolean | null;
   notes: string;
+  group: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -65,6 +66,11 @@ const guestSchema = new mongoose.Schema({
   },
   notes: {
     type: String,
+    default: ''
+  },
+  group: {
+    type: String,
+    required: false,
     default: ''
   },
   createdAt: {

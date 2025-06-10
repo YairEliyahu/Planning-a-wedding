@@ -8,7 +8,6 @@ import Head from 'next/head';
 import * as XLSX from 'xlsx';
 import LoadingSpinner from '../../../components/LoadingSpinner';
 import { Button } from '@/components/ui/button';
-import { motion } from 'framer-motion';
 
 interface Guest {
   _id: string;
@@ -18,6 +17,7 @@ interface Guest {
   side: 'חתן' | 'כלה' | 'משותף';
   isConfirmed: boolean | null;
   notes: string;
+  group?: string; // קבוצה: משפחה, עבודה, חברים, צבא וכו'
   createdAt: Date;
   updatedAt: Date;
   sharedEventId?: string;
@@ -40,7 +40,8 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     numberOfGuests: 0,
     side: 'משותף',
     isConfirmed: null,
-    notes: ''
+    notes: '',
+    group: ''
   });
   const [isAddingGuest, setIsAddingGuest] = useState(false);
   const [editingGuestId, setEditingGuestId] = useState<string | null>(null);
@@ -62,7 +63,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
   const [importProgress, setImportProgress] = useState<{ current: number, total: number, currentName: string }>({ current: 0, total: 0, currentName: '' });
   const [importOverlay, setImportOverlay] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 50; // שינוי מ-10 ל-50
+  const itemsPerPage = 100; // שינוי מ-50 ל-100 כדי להציג יותר אורחים
 
   // First define filteredGuests
   const filteredGuests = useMemo(() => {
@@ -386,6 +387,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         isConfirmed: boolean | null;
         notes: string;
         sharedEventId?: string;
+        group?: string;
       } = {
         ...newGuest,
         userId: params.id,
@@ -428,6 +430,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
           side: 'משותף',
           isConfirmed: null,
           notes: '',
+          group: ''
         });
   
         // רענון ברקע אחרי שניה - ניקוי המטמון לקבלת נתונים טריים
@@ -576,6 +579,29 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     const totalGuests = guests.reduce((sum, guest) => sum + guest.numberOfGuests, 0);
     const confirmedGuests = confirmed.reduce((sum, guest) => sum + guest.numberOfGuests, 0);
     
+    // לוג מפורט לאבחון הבעיה
+    console.log('=== GUEST STATS DEBUG ===');
+    console.log('Total guest records:', guests.length);
+    console.log('Total individual guests:', totalGuests);
+    console.log('Sample guest data:', guests.slice(0, 3).map(g => ({ 
+      name: g.name, 
+      numberOfGuests: g.numberOfGuests, 
+      _id: g._id 
+    })));
+    
+    // בדיקה לכפילויות לפי שם
+    const nameOccurrences = new Map<string, number>();
+    guests.forEach(guest => {
+      const name = guest.name.trim().toLowerCase();
+      nameOccurrences.set(name, (nameOccurrences.get(name) || 0) + 1);
+    });
+    
+    const duplicates = Array.from(nameOccurrences.entries()).filter(([, count]) => count > 1);
+    if (duplicates.length > 0) {
+      console.log('DUPLICATES FOUND:', duplicates);
+    }
+    console.log('========================');
+    
     return {
       totalCount: guests.length,
       confirmedCount: confirmed.length,
@@ -693,6 +719,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         const sideColumn = findColumn(['מתאם של...', 'צד', 'שיוך']) || columnKeys.find(c => c.includes('מתאם') || c.includes('שיוך')) || '';
         const relationColumn = findColumn(['שיוך להזמנה', 'שיוך']) || '';
         const notesColumn = findColumn(['הערות (כולל הופעי)', 'הערות', 'notes']) || '';
+        const groupColumn = findColumn(['קבוצה', 'group', 'סוג', 'קטגוריה', 'יחס', 'מקור', 'שיוך', 'יחס למוזמנים', 'משפחה', 'חברות', 'יחסים', 'חברים', 'חתן', 'כלה', 'הזמנות', 'משפחת', 'בני', 'סוג קשר', 'יחס משפחתי', 'קישור', 'זיקה']) || '';
         
         console.log('Identified columns:', { 
           nameColumn, 
@@ -700,7 +727,8 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
           guestsColumn, 
           sideColumn, 
           notesColumn,
-          relationColumn 
+          relationColumn,
+          groupColumn 
         });
         
         // אם לא זוהתה עמודת שם, ננסה להשתמש בעמודה הראשונה
@@ -719,7 +747,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
             // דילוג על עמודות שכבר זיהינו
             if (column === nameColumn || column === phoneColumn || 
                 column === notesColumn || column === sideColumn || 
-                column === relationColumn) continue;
+                column === relationColumn || column === groupColumn) continue;
             
             let numericCount = 0;
             let totalCount = 0;
@@ -860,7 +888,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
               // בדיקת עמודות מספריות אחרות
               for (const key of columnKeys) {
                 if (key !== guestsColumn && key !== nameColumn && key !== phoneColumn && 
-                    key !== sideColumn && key !== notesColumn) {
+                    key !== sideColumn && key !== notesColumn && key !== groupColumn) {
                   const value = row[key];
                   if (value !== undefined && value !== '') {
                     let parsedValue = 0;
@@ -1087,6 +1115,92 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
             // הערות (אופציונלי)
             const notes = notesColumn ? String(row[notesColumn] || '') : '';
             
+            // זיהוי קבוצה מכל העמודות והנתונים
+            let detectedGroup = '';
+            
+            // קודם כל, בדיקה אם יש עמודת קבוצה ישירה
+            if (groupColumn && row[groupColumn]) {
+              const explicitGroup = String(row[groupColumn]).trim();
+              if (explicitGroup) {
+                detectedGroup = explicitGroup;
+                console.log(`Found explicit group "${explicitGroup}" for guest "${guestName}"`);
+              }
+            }
+            
+            // אם לא מצאנו קבוצה מפורשת, ננסה לזהות אוטומטית
+            if (!detectedGroup) {
+              // אוצר מילים מעודכן לזיהוי קבוצות - כולל המילים הספציפיות מהאקסל
+              const groupKeywords = {
+                'משפחה': [
+                  'משפחה', 'משפחת', 'משפ', 'family', 'בני משפחה', 'קרובי משפחה', 
+                  'משפחה חתן', 'משפחה כלה', 'משפחת החתן', 'משפחת הכלה',
+                  'אח', 'אחות', 'דוד', 'דודה', 'בן דוד', 'בת דודה', 'סבא', 'סבתא', 
+                  'הורים', 'הורי', 'הורי החתן', 'הורי הכלה', 'חבר הורים',
+                  'אמא', 'אבא', 'אם', 'אב', 'בן', 'בת', 'ילדים', 'גיס', 'גיסה', 
+                  'חמות', 'מחותנים', 'מחותן', 'חמי', 'חמותה'
+                ],
+                'עבודה': [
+                  'עבודה', 'עבוד', 'מעסיק', 'משרד', 'עמית', 'עמיתה', 'עמיתים', 
+                  'work', 'office', 'colleague', 'boss', 'company', 'חברה', 'שותף', 
+                  'מנהל', 'מנהלת', 'רופא', 'עורך דין', 'עו״ד', 'אדריכל', 'מהנדס', 
+                  'עסק', 'בנק', 'ביטוח', 'קבלן', 'מכירות', 'צוות', 'מחלקה', 
+                  'עובד', 'עובדת', 'מקצועי', 'עבוד'
+                ],
+                'חברים': [
+                  'חבר', 'חברה', 'חברים', 'חברות', 'friend', 'חברת ילדות', 
+                  'חבר ילדות', 'ידיד', 'ידידה', 'ידידים', 'חבורה', 'חבר טוב', 
+                  'חברה טובה', 'שכנה', 'שכן', 'שכנים', 'קרוב'
+                ],
+                'צבא': [
+                  'צבא', 'צה״ל', 'יחידה', 'יח', 'שירות', 'גדוד', 'פלוגה', 'קמ״ן', 
+                  'מפקד', 'מפקדת', 'סמל', 'רס״ר', 'טוראי', 'חובש', 'קצין', 'קצינה', 
+                  'סגן', 'סרן', 'אלוף', 'גולני', 'נחל', 'כפיר', 'צנחנים', 'שייטת', 
+                  'טייס', 'לחימה', 'קרבי', 'מילואים', 'חיל', 'חיילים', 'soldier', 
+                  'army', 'military', 'לוחם', 'לוחמת', 'מיל', 'מיל״', 'מילואי'
+                ],
+                'לימודים': [
+                  'לימודים', 'בית ספר', 'ביה״ס', 'חברי כיתה', 'כיתה', 'שנתון', 
+                  'אוניברסיטה', 'אוני', 'פקולטה', 'תואר', 'תלמידי', 'תלמידות', 
+                  'מורה', 'מורים', 'מרצה', 'פרופסור', 'ד״ר', 'מכללה', 'תיכון', 
+                  'יסודי', 'חטיבה', 'כיתתי', 'לימוד', 'קורס', 'סמינר', 'מכינה', 
+                  'ישיבה', 'מדרשה', 'סטודנט', 'סטודנטית', 'school', 'college', 'university'
+                ],
+                'שכונה': [
+                  'שכונה', 'שכן', 'שכנה', 'שכנים', 'רחוב', 'רח\'', 'שדרות', 'בניין', 
+                  'קומה', 'דירה', 'בית', 'אזור', 'neighbor', 'neighborhood', 'מקומי', 
+                  'קהילה', 'יישוב', 'עיר', 'מושב', 'קיבוץ', 'כפר'
+                ]
+              };
+              
+              // בדיקה בכל העמודות לזיהוי קבוצה
+              const allTextData = [guestName, notes];
+              for (const key of columnKeys) {
+                if (row[key] && key !== groupColumn) { // לא לבדוק את עמודת הקבוצה פעמיים
+                  allTextData.push(String(row[key]));
+                }
+              }
+              
+              // זיהוי קבוצה מהטקסט
+              for (const text of allTextData) {
+                if (text && !detectedGroup) {
+                  const normalizedText = text.toLowerCase().trim();
+                  
+                  // בדיקה בכל קטגוריה באוצר המילים
+                  for (const [groupName, keywords] of Object.entries(groupKeywords)) {
+                    for (const keyword of keywords) {
+                      const keywordStr = typeof keyword === 'string' ? keyword : String(keyword);
+                      if (normalizedText.includes(keywordStr.toLowerCase())) {
+                        detectedGroup = groupName;
+                        console.log(`Found group "${groupName}" for guest "${guestName}" using keyword "${keywordStr}" in text "${text}"`);
+                        break;
+                      }
+                    }
+                    if (detectedGroup) break;
+                  }
+                }
+              }
+            }
+
             const guestData = {
               userId: params.id,
               name: guestName,
@@ -1095,6 +1209,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
               side,
               isConfirmed: null, // בדרך כלל אורחים מיובאים מסומנים כממתינים לאישור
               notes,
+              group: detectedGroup, // הקבוצה שזוהתה
               createdAt: new Date(),
               updatedAt: new Date()
             };
@@ -1182,6 +1297,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         'טלפון': '050-1234567',
         'מספר אורחים': 2,
         'צד': 'חתן',
+        'קבוצה': 'משפחה',
         'אישור הגעה': '',
         'הערות': 'דוגמה להערה'
       },
@@ -1190,6 +1306,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         'טלפון': '052-9876543',
         'מספר אורחים': 1,
         'צד': 'כלה',
+        'קבוצה': 'חברים',
         'אישור הגעה': '',
         'הערות': ''
       },
@@ -1198,6 +1315,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
         'טלפון': '054-5551234',
         'מספר אורחים': 4,
         'צד': 'משותף',
+        'קבוצה': 'עבודה',
         'אישור הגעה': '',
         'הערות': 'חברים משותפים'
       }
@@ -1213,7 +1331,8 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       ['1. מלא את הפרטים בטבלה מתחת לכותרות'],
       ['2. עמודת "שם" היא חובה, שאר העמודות אופציונליות'],
       ['3. עבור "צד" ניתן לרשום: חתן, כלה, או משותף'],
-      ['4. עבור "אישור הגעה" ניתן לרשום: כן, לא, או להשאיר ריק'],
+      ['4. עבור "קבוצה" ניתן לרשום: משפחה, עבודה, חברים, צבא, לימודים, שכונה (או להשאיר ריק)'],
+      ['5. עבור "אישור הגעה" ניתן לרשום: כן, לא, או להשאיר ריק'],
       ['']
     ], { origin: 'A1' });
 
@@ -1223,6 +1342,7 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
       { wch: 15 }, // טלפון
       { wch: 8 },  // מספר אורחים
       { wch: 10 }, // צד
+      { wch: 12 }, // קבוצה
       { wch: 10 }, // אישור הגעה
       { wch: 30 }  // הערות
     ];
@@ -1323,6 +1443,39 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
     } catch (error) {
       console.error('Error in force refresh:', error);
       setError('שגיאה ברענון רשימת האורחים');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // פונקציה לניקוי כפילויות
+  const handleCleanupDuplicates = async () => {
+    if (!confirm('פעולה זו תסיר כפילויות מרשימת האורחים. האם להמשיך?')) {
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      const response = await fetch(`/api/guests/cleanup-duplicates?userId=${params.id}`, {
+        method: 'POST',
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Failed to cleanup duplicates');
+      }
+      
+      alert(`ניקוי הושלם: ${data.removedCount} כפילויות הוסרו`);
+      
+      // רענן את הרשימה
+      dataCache.clear();
+      await fetchGuestlist();
+      
+    } catch (error) {
+      console.error('Error cleaning up duplicates:', error);
+      alert('שגיאה בניקוי כפילויות');
     } finally {
       setIsLoading(false);
     }
@@ -1580,6 +1733,17 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                 </label>
                 
                 <button
+                  onClick={handleCleanupDuplicates}
+                  className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center text-lg justify-center"
+                  title="נקה כפילויות מרשימת האורחים"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2v0M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+                  </svg>
+                  נקה כפילויות
+                </button>
+                
+                <button
                   onClick={handleDeleteAllGuests}
                   className="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg transition-colors flex items-center text-lg justify-center"
                 >
@@ -1705,25 +1869,28 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-100">
                     <tr>
-                      <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         שם אורח
                       </th>
-                      <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
-                        מספר טלפון
+                      <th scope="col" className="px-2 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        טלפון
                       </th>
-                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         מספר מוזמנים
                       </th>
-                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
-                        מהצד של
+                      <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        צד
                       </th>
-                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        קבוצה
+                      </th>
+                      <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         סטטוס
                       </th>
-                      <th scope="col" className="px-6 py-4 text-right text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-2 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                         הערות
                       </th>
-                      <th scope="col" className="px-6 py-4 text-center text-sm font-medium text-gray-500 uppercase tracking-wider">
+                      <th scope="col" className="px-2 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                         פעולות
                       </th>
                     </tr>
@@ -1731,56 +1898,56 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {paginatedGuests.map(guest => (
                       <tr key={guest._id} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-5 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           {editingGuestId === guest._id ? (
                             <input
                               type="text"
                               value={guest.name}
                               onChange={(e) => handleEditGuest({...guest, name: e.target.value})}
-                              className="w-full p-2 border border-gray-300 rounded text-lg"
+                              className="w-full p-1 border border-gray-300 rounded text-sm"
                             />
                           ) : (
-                            <div className="text-base font-medium text-gray-900">{guest.name}</div>
+                            <div className="text-sm font-medium text-gray-900">{guest.name}</div>
                           )}
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           {editingGuestId === guest._id ? (
                             <input
                               type="text"
                               value={guest.phoneNumber}
                               onChange={(e) => handleEditGuest({...guest, phoneNumber: e.target.value})}
-                              className="w-full p-2 border border-gray-300 rounded text-lg"
+                              className="w-full p-1 border border-gray-300 rounded text-sm"
                             />
                           ) : (
-                            <div className="text-base text-gray-600">{guest.phoneNumber}</div>
+                            <div className="text-sm text-gray-600">{guest.phoneNumber}</div>
                           )}
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
                           {editingGuestId === guest._id ? (
                             <input
                               type="number"
                               min="0"
                               value={guest.numberOfGuests}
                               onChange={(e) => handleEditGuest({...guest, numberOfGuests: parseInt(e.target.value) || 0})}
-                              className="w-20 p-2 border border-gray-300 rounded text-center text-lg"
+                              className="w-16 p-1 border border-gray-300 rounded text-center text-sm"
                             />
                           ) : (
-                            <div className="text-base text-gray-900 font-medium">{guest.numberOfGuests}</div>
+                            <div className="text-sm text-gray-900 font-medium">{guest.numberOfGuests}</div>
                           )}
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
                           {editingGuestId === guest._id ? (
                             <select
                               value={guest.side}
                               onChange={(e) => handleEditGuest({...guest, side: e.target.value as 'חתן' | 'כלה' | 'משותף'})}
-                              className="p-2 border border-gray-300 rounded text-lg"
+                              className="p-1 border border-gray-300 rounded text-sm"
                             >
                               <option value="חתן">חתן</option>
                               <option value="כלה">כלה</option>
                               <option value="משותף">משותף</option>
                             </select>
                           ) : (
-                            <span className={`px-3 py-1.5 inline-flex text-sm leading-5 font-semibold rounded-full ${
+                            <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
                               guest.side === 'חתן' ? 'bg-blue-100 text-blue-800' : 
                               guest.side === 'כלה' ? 'bg-pink-100 text-pink-800' : 
                               'bg-purple-100 text-purple-800'
@@ -1789,72 +1956,101 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                             </span>
                           )}
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
-                          <div className="grid grid-cols-3 gap-4 w-[160px] mx-auto">
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
+                          {editingGuestId === guest._id ? (
+                            <select
+                              value={guest.group || ''}
+                              onChange={(e) => handleEditGuest({...guest, group: e.target.value})}
+                              className="p-1 border border-gray-300 rounded text-sm"
+                            >
+                              <option value="">ללא</option>
+                              <option value="משפחה">משפחה</option>
+                              <option value="עבודה">עבודה</option>
+                              <option value="חברים">חברים</option>
+                              <option value="צבא">צבא</option>
+                              <option value="לימודים">לימודים</option>
+                              <option value="שכונה">שכונה</option>
+                            </select>
+                          ) : (
+                            <span className={`px-2 py-1 inline-flex text-xs leading-4 font-semibold rounded-full ${
+                              guest.group === 'משפחה' ? 'bg-blue-100 text-blue-800' : 
+                              guest.group === 'עבודה' ? 'bg-green-100 text-green-800' : 
+                              guest.group === 'חברים' ? 'bg-pink-100 text-pink-800' : 
+                              guest.group === 'צבא' ? 'bg-purple-100 text-purple-800' : 
+                              guest.group === 'לימודים' ? 'bg-indigo-100 text-indigo-800' : 
+                              guest.group === 'שכונה' ? 'bg-yellow-100 text-yellow-800' : 
+                              'bg-gray-100 text-gray-500'
+                            }`}>
+                              {guest.group || 'ללא'}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
+                          <div className="grid grid-cols-3 gap-1 w-[120px] mx-auto">
                             <button
                               onClick={() => handleConfirmGuest(guest._id, true)}
-                              className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              className={`p-1 rounded-full flex items-center justify-center ${guest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                               title="אישר/ה הגעה"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                               </svg>
                             </button>
                             <button
                               onClick={() => handleConfirmGuest(guest._id, false)}
-                              className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              className={`p-1 rounded-full flex items-center justify-center ${guest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                               title="לא מגיע/ה"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                               </svg>
                             </button>
                             <button
                               onClick={() => handleConfirmGuest(guest._id, null)}
-                              className={`p-1.5 rounded-full flex items-center justify-center ${guest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
+                              className={`p-1 rounded-full flex items-center justify-center ${guest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                               title="ממתין/ה לאישור"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
                               </svg>
                             </button>
                           </div>
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           {editingGuestId === guest._id ? (
                             <input
                               type="text"
                               value={guest.notes}
                               onChange={(e) => handleEditGuest({...guest, notes: e.target.value})}
-                              className="w-full p-2 border border-gray-300 rounded text-lg"
+                              className="w-full p-1 border border-gray-300 rounded text-sm"
                             />
                           ) : (
-                            <div className="text-base text-gray-600">{guest.notes}</div>
+                            <div className="text-sm text-gray-600 max-w-[150px] truncate" title={guest.notes}>{guest.notes}</div>
                           )}
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
                           {editingGuestId === guest._id ? (
                             <button 
                               onClick={() => handleEditGuest(guest)} 
-                              className="text-green-600 hover:text-green-900 text-lg font-medium"
+                              className="text-green-600 hover:text-green-900 text-sm font-medium"
                             >
                               שמור
                             </button>
                           ) : (
-                            <div className="flex justify-center space-x-6">
+                            <div className="flex justify-center space-x-2">
                               <button 
                                 onClick={() => handleEditGuest(guest)} 
-                                className="text-indigo-600 hover:text-indigo-900 p-1.5 hover:bg-indigo-100 rounded-full transition-colors"
+                                className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-100 rounded-full transition-colors"
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                   <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
                                 </svg>
                               </button>
                               <button 
                                 onClick={() => handleDeleteGuest(guest._id)} 
-                                className="text-red-600 hover:text-red-900 p-1.5 hover:bg-red-100 rounded-full transition-colors"
+                                className="text-red-600 hover:text-red-900 p-1 hover:bg-red-100 rounded-full transition-colors"
                               >
-                                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                                   <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
                                 </svg>
                               </button>
@@ -1867,124 +2063,101 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
                     {/* שורה להוספת אורח חדש */}
                     {isAddingGuest && (
                       <tr className="bg-blue-50">
-                        <td className="px-6 py-5 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
                           <input
                             type="text"
                             value={newGuest.name}
                             onChange={(e) => setNewGuest({...newGuest, name: e.target.value})}
                             placeholder="שם האורח"
-                            className="w-full p-2 border border-gray-300 rounded text-lg"
-                            autoFocus
+                            className="w-full p-1 border border-gray-300 rounded text-sm"
                           />
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <input
                             type="text"
                             value={newGuest.phoneNumber}
                             onChange={(e) => setNewGuest({...newGuest, phoneNumber: e.target.value})}
-                            placeholder="מספר טלפון"
-                            className="w-full p-2 border border-gray-300 rounded text-lg"
+                            placeholder="טלפון"
+                            className="w-full p-1 border border-gray-300 rounded text-sm"
                           />
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
                           <input
                             type="number"
                             min="0"
                             value={newGuest.numberOfGuests}
                             onChange={(e) => setNewGuest({...newGuest, numberOfGuests: parseInt(e.target.value) || 0})}
-                            className="w-20 p-2 border border-gray-300 rounded text-center text-lg"
+                            className="w-16 p-1 border border-gray-300 rounded text-center text-sm"
                           />
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
                           <select
                             value={newGuest.side}
                             onChange={(e) => setNewGuest({...newGuest, side: e.target.value as 'חתן' | 'כלה' | 'משותף'})}
-                            className="p-2 border border-gray-300 rounded text-lg"
+                            className="p-1 border border-gray-300 rounded text-sm"
                           >
                             <option value="חתן">חתן</option>
                             <option value="כלה">כלה</option>
                             <option value="משותף">משותף</option>
                           </select>
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
-                          <div className="grid grid-cols-3 gap-4 w-[160px] mx-auto">
-                            <button
-                              onClick={() => setNewGuest({...newGuest, isConfirmed: true})}
-                              className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                              title="אישר/ה הגעה"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => setNewGuest({...newGuest, isConfirmed: false})}
-                              className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                              title="לא מגיע/ה"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                            <button
-                              onClick={() => setNewGuest({...newGuest, isConfirmed: null})}
-                              className={`p-1.5 rounded-full flex items-center justify-center ${newGuest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
-                              title="ממתין/ה לאישור"
-                            >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-3a1 1 0 00-.867.5 1 1 0 11-1.731-1A3 3 0 0113 8a3.001 3.001 0 01-2 2.83V11a1 1 0 11-2 0v-1a1 1 0 011-1 1 1 0 100-2zm0 8a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          </div>
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
+                          <select
+                            value={newGuest.group || ''}
+                            onChange={(e) => setNewGuest({...newGuest, group: e.target.value})}
+                            className="p-1 border border-gray-300 rounded text-sm"
+                          >
+                            <option value="">בחר קבוצה</option>
+                            <option value="משפחה">משפחה</option>
+                            <option value="עבודה">עבודה</option>
+                            <option value="חברים">חברים</option>
+                            <option value="צבא">צבא</option>
+                            <option value="לימודים">לימודים</option>
+                            <option value="שכונה">שכונה</option>
+                          </select>
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap">
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
+                          <span className="text-xs text-gray-500">ממתין</span>
+                        </td>
+                        <td className="px-2 py-4 whitespace-nowrap">
                           <input
                             type="text"
                             value={newGuest.notes}
                             onChange={(e) => setNewGuest({...newGuest, notes: e.target.value})}
                             placeholder="הערות"
-                            className="w-full p-2 border border-gray-300 rounded text-lg"
+                            className="w-full p-1 border border-gray-300 rounded text-sm"
                           />
                         </td>
-                        <td className="px-6 py-5 whitespace-nowrap text-center">
-                          <div className="flex justify-between gap-2">
-                            {/* טופס הוספת אורח - כפתור משופר */}
+                        <td className="px-2 py-4 whitespace-nowrap text-center">
+                          <div className="flex justify-center space-x-2">
                             <button
                               type="button"
                               onClick={(e) => {
-                                e.preventDefault(); // עצירת פעולות ברירת מחדל
+                                e.preventDefault();
                                 console.log('*** כפתור נלחץ - מתחיל תהליך הוספת אורח ***', new Date().toISOString());
                                 console.log('מצב הכפתור:', !newGuest.name.trim() ? 'לא פעיל' : 'פעיל');
                                 console.log('שם אורח:', newGuest.name);
                                 handleAddGuest();
                               }}
                               disabled={!newGuest.name.trim()}
-                              className={`flex-grow p-2 rounded-md ${
+                              className={`p-1 rounded-full ${
                                !newGuest.name.trim() 
-                                  ? 'bg-gray-300 cursor-not-allowed' 
-                                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-                              }`}
+                                 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                                 : 'bg-green-600 hover:bg-green-700 text-white cursor-pointer'
+                              } text-sm transition-colors flex items-center justify-center`}
+                              title="הוסף אורח"
                             >
-                              הוסף אורח
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
                             </button>
-                            {/* כפתור גיבוי מסוג div לבדיקה */}
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => {
-                                console.log('*** DIV גיבוי נלחץ ***');
-                                handleAddGuest();
-                              }}
-                              className="flex-grow p-2 rounded-md bg-green-600 hover:bg-green-700 text-white cursor-pointer text-center mt-2"
-                            >
-                              נסה להוסיף אורח (גיבוי)
-                            </div>
                             <button
                               onClick={() => setIsAddingGuest(false)}
-                              className="bg-red-600 text-white p-2 rounded-full hover:bg-red-700 transition-colors"
+                              className="p-1 rounded-full bg-gray-300 hover:bg-gray-400 text-gray-600 text-sm transition-colors flex items-center justify-center"
+                              title="ביטול"
                             >
-                              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" viewBox="0 0 20 20" fill="currentColor">
-                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
                               </svg>
                             </button>
                           </div>

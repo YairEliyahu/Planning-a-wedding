@@ -21,6 +21,7 @@ export type GuestType = {
   side: string;
   isConfirmed: boolean | null;
   notes: string;
+  group?: string; // קבוצה: משפחה, עבודה, חברים, צבא וכו'
   sharedEventId?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -253,7 +254,7 @@ export async function POST(req: NextRequest) {
   try {
     // Parse the request body
     const body = await req.json();
-    const { userId, name, phoneNumber, numberOfGuests, side, isConfirmed, notes } = body;
+    const { userId, name, phoneNumber, numberOfGuests, side, isConfirmed, notes, group } = body;
 
     if (!userId || !name) {
       return NextResponse.json(
@@ -277,30 +278,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // בדיקה האם אורח כבר קיים - מניעת כפילויות
+    // בדיקה האם אורח כבר קיים - מניעת כפילויות מתקדמת
     const guestName = name.trim();
     
-    // בדיקה אם כבר קיים אורח עם אותו שם למשתמש הזה
+    // בדיקה אם כבר קיים אורח עם אותו שם - כולל בחשבונות מחוברים
     let existingGuest;
     
-    // אם יש שיתוף אירוע, בדוק לפי מזהה האירוע המשותף
+    // אם יש שיתוף אירוע, בדוק לפי מזהה האירוע המשותף בלבד
     if (user.sharedEventId) {
+      // חפש אורח עם אותו שם במזהה האירוע המשותף, ללא קשר למשתמש
       existingGuest = await Guest.findOne({
         sharedEventId: user.sharedEventId,
-        name: guestName,
-        userId: userObjectId
+        name: { $regex: new RegExp(`^${guestName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } // case insensitive exact match
       });
     } else {
       // אחרת, בדוק רק לפי מזהה משתמש
       existingGuest = await Guest.findOne({
-        name: guestName,
+        name: { $regex: new RegExp(`^${guestName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
         userId: userObjectId
       });
     }
     
     // אם האורח כבר קיים, עדכן אותו במקום ליצור חדש
     if (existingGuest) {
-      console.log(`[GUEST API] Guest with name "${guestName}" already exists, updating instead of creating new`);
+      console.log(`[GUEST API] Guest with name "${guestName}" already exists (ID: ${existingGuest._id}), updating instead of creating new`);
       
       // עדכון האורח הקיים
       existingGuest.phoneNumber = phoneNumber;
@@ -308,59 +309,15 @@ export async function POST(req: NextRequest) {
       existingGuest.side = side || 'משותף';
       existingGuest.isConfirmed = isConfirmed === undefined ? null : isConfirmed;
       existingGuest.notes = notes || '';
+      existingGuest.group = group || '';
       existingGuest.updatedAt = new Date();
       
-      // אם יש מזהה אירוע משותף, ודא שהוא מוגדר
-      if (user.sharedEventId) {
+      // ודא שיש מזהה אירוע משותף
+      if (user.sharedEventId && !existingGuest.sharedEventId) {
         existingGuest.sharedEventId = user.sharedEventId;
       }
       
       await existingGuest.save();
-      
-      // אם יש חשבון מקושר, עדכן גם את העותק שלו
-      if (user.connectedUserId && user.sharedEventId) {
-        try {
-          // חיפוש העותק של השותף
-          const partnerCopy = await Guest.findOne({
-            name: guestName,
-            userId: new mongoose.Types.ObjectId(user.connectedUserId),
-            sharedEventId: user.sharedEventId
-          });
-          
-          if (partnerCopy) {
-            // עדכון העותק של השותף
-            partnerCopy.phoneNumber = phoneNumber;
-            partnerCopy.numberOfGuests = numberOfGuests !== undefined && numberOfGuests !== null ? numberOfGuests : 1;
-            partnerCopy.side = side || 'משותף';
-            partnerCopy.isConfirmed = isConfirmed === undefined ? null : isConfirmed;
-            partnerCopy.notes = notes || '';
-            partnerCopy.updatedAt = new Date();
-            
-            await partnerCopy.save();
-            console.log(`[GUEST API] Updated partner's copy: ${partnerCopy._id}`);
-          } else {
-            // אם אין עותק לשותף, צור אחד
-            const newPartnerCopy = new Guest({
-              userId: new mongoose.Types.ObjectId(user.connectedUserId),
-              name: guestName,
-              phoneNumber,
-              numberOfGuests: numberOfGuests !== undefined && numberOfGuests !== null ? numberOfGuests : 1,
-              side: side || 'משותף',
-              isConfirmed: isConfirmed === undefined ? null : isConfirmed,
-              notes: notes || '',
-              sharedEventId: user.sharedEventId,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            });
-            
-            await newPartnerCopy.save();
-            console.log(`[GUEST API] Created partner's copy: ${newPartnerCopy._id}`);
-          }
-        } catch (syncError) {
-          console.error(`[GUEST API] Error syncing to partner: ${syncError}`);
-          // Continue execution even if sync fails
-        }
-      }
       
       return NextResponse.json({
         success: true,
@@ -378,6 +335,7 @@ export async function POST(req: NextRequest) {
       side: string;
       isConfirmed: boolean | null;
       notes: string;
+      group?: string;
       sharedEventId?: string;
     } = {
       userId: userObjectId,
@@ -386,7 +344,8 @@ export async function POST(req: NextRequest) {
       numberOfGuests: numberOfGuests !== undefined && numberOfGuests !== null ? numberOfGuests : 1,
       side: side || 'משותף',
       isConfirmed: isConfirmed === undefined ? null : isConfirmed,
-      notes: notes || ''
+      notes: notes || '',
+      group: group || ''
     };
     
     // ALWAYS add sharedEventId if available - this is critical for data sharing
@@ -398,36 +357,11 @@ export async function POST(req: NextRequest) {
     const guest = await Guest.create(guestData);
     console.log(`[GUEST API] Created new guest with ID ${guest._id}`);
 
-    // After creating a new guest, also create a copy for the connected user if they exist
+    // אם יש חשבונות מחוברים - לא ליצור עותקים! 
+    // האורח כבר נגיש לשני החשבונות באמצעות sharedEventId
+    // זה מונע כפילויות מיותרות
     if (user.connectedUserId && user.sharedEventId) {
-      try {
-        // בדיקה אם כבר קיים עותק אצל השותף
-        const existingPartnerCopy = await Guest.findOne({
-          name: guestName,
-          userId: new mongoose.Types.ObjectId(user.connectedUserId),
-          sharedEventId: user.sharedEventId
-        });
-        
-        if (!existingPartnerCopy) {
-          // יצירת עותק לשותף רק אם לא קיים כבר
-          const connectedGuestData = {
-            ...guestData,
-            userId: new mongoose.Types.ObjectId(user.connectedUserId),
-            sharedEventId: user.sharedEventId,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          };
-          
-          // Create connected user's copy
-          const connectedGuest = await Guest.create(connectedGuestData);
-          console.log(`[GUEST API] Created copy of guest for connected user: ${connectedGuest._id}`);
-        } else {
-          console.log(`[GUEST API] Partner already has a copy of this guest: ${existingPartnerCopy._id}`);
-        }
-      } catch (copyError) {
-        console.error(`[GUEST API] Error creating guest copy for connected user: ${copyError}`);
-        // Continue execution even if copy fails
-      }
+      console.log(`[GUEST API] Guest created with sharedEventId ${user.sharedEventId} - accessible to both connected accounts without duplication`);
     }
 
     return NextResponse.json({

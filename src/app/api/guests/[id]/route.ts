@@ -68,6 +68,7 @@ export async function PUT(
       side: string;
       isConfirmed: boolean | null;
       notes: string;
+      group?: string;
       updatedAt: Date;
       sharedEventId?: string;
     } = {
@@ -77,6 +78,7 @@ export async function PUT(
       side: body.side,
       isConfirmed: body.isConfirmed,
       notes: body.notes,
+      group: body.group || '',
       updatedAt: new Date()
     };
 
@@ -131,6 +133,7 @@ export async function PUT(
           connectedGuestCopy.side = updateData.side as 'חתן' | 'כלה' | 'משותף';
           connectedGuestCopy.isConfirmed = updateData.isConfirmed;
           connectedGuestCopy.notes = updateData.notes;
+          connectedGuestCopy.group = updateData.group || '';
           connectedGuestCopy.sharedEventId = user.sharedEventId;
           connectedGuestCopy.updatedAt = new Date();
           
