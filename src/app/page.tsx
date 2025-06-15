@@ -580,49 +580,39 @@ export default function HomePage() {
     initializeUser();
   }, [searchParams, login]);
 
-  // מעבר בין חלקי העמוד עם גלילה - מוכן עם useCallback
+  // מעבר בין חלקי העמוד עם גלילה - פשוט וחלק יותר
   const handleScroll = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    e.stopPropagation();
     
     const now = Date.now();
-    // Debouncing מופחת למניעת רגישות יתר
-    if (now - lastScrollTime.current < 100) return;
+    // Debouncing מורכב יותר למניעת קפיצות
+    if (now - lastScrollTime.current < 800) return;
     lastScrollTime.current = now;
     
     // מניעת טריגר כפול
     if (isScrolling.current) return;
     isScrolling.current = true;
     
-    // שימוש ב-requestAnimationFrame לביצועים טובים יותר
-    if (animationFrameId.current) {
-      cancelAnimationFrame(animationFrameId.current);
+    const currentSection = activeSection;
+    let nextSection = currentSection;
+    
+    if (e.deltaY > 0) {
+      // גלילה למטה
+      nextSection = currentSection < 2 ? currentSection + 1 : currentSection;
+    } else {
+      // גלילה למעלה  
+      nextSection = currentSection > 0 ? currentSection - 1 : currentSection;
     }
     
-    animationFrameId.current = requestAnimationFrame(() => {
-      const currentSection = activeSection;
-      let nextSection = currentSection;
-      
-      if (e.deltaY > 0) {
-        // גלילה למטה
-        nextSection = currentSection < 2 ? currentSection + 1 : currentSection;
-      } else {
-        // גלילה למעלה
-        nextSection = currentSection > 0 ? currentSection - 1 : currentSection;
-      }
-      
-      console.log('Scroll from section:', currentSection, 'to section:', nextSection);
-      
-      if (nextSection !== currentSection) {
-        setActiveSection(nextSection);
-      }
-      
-      // זמן נעילה קצר יותר אבל עקבי
-      setTimeout(() => {
-        isScrolling.current = false;
-      }, 600);
-    });
-  }, [activeSection]); // הוספת activeSection כ-dependency
+    if (nextSection !== currentSection) {
+      setActiveSection(nextSection);
+    }
+    
+    // שחרור נעילה לאחר זמן קבוע
+    setTimeout(() => {
+      isScrolling.current = false;
+    }, 800);
+  }, [activeSection]);
 
   // גלילה למיקום ספציפי על פי לחיצת קישור - מוכן עם useCallback
   const scrollToSection = useCallback((sectionId: number) => {
@@ -1075,7 +1065,7 @@ export default function HomePage() {
                 className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 md:gap-8 lg:gap-10 xl:gap-12 mt-4 sm:mt-6 md:mt-8 laptop-sm:gap-4 laptop-sm:mt-4"
                 variants={containerVariants}
                 initial="hidden"
-                animate={activeSection === 1 ? "show" : "hidden"}
+                animate={activeSection === 1 ? 'show' : 'hidden'}
                 transition={{ duration: 0.8, delay: 0.5 }}
               >
                 <motion.div 

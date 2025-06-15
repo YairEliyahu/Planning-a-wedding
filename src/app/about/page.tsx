@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import Navbar from '@/components/Navbar';
 
 export default function AboutPage() {
   const router = useRouter();
@@ -11,110 +12,113 @@ export default function AboutPage() {
   };
   
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>קצת עלינו...</h1>
-        <div style={styles.titleDecoration}></div>
-      </div>
-      
-      <div style={styles.content}>
-        <section style={styles.section}>
-          <div style={styles.sectionIcon}>
-            <i className="fas fa-users"></i>
-          </div>
-          <div style={styles.sectionContent}>
-            <h2 style={styles.subtitle}>מי אנחנו?</h2>
-            <p style={styles.text}>
-            ב-Wedding Planner אנחנווו מאמינים שכל סיפור אהבה ראוי לחתונה מהחלומות. לכן יצרנו עבורכם פלטפורמה שתלווה אתכם צעד אחר 
-            צעד – מההצעה המרגשת ועד לריקוד הראשון. עם מגוון ספקים איכותיים, טיפים שיחסכו 
-            לכם כאבי ראש וכלים שיעזרו לשמור על סדר ותקציב,
-             אנחנו כאן כדי שתוכלו להתמקד בדבר הכי חשוב – האהבה שלכם.
-            </p>
-          </div>
-        </section>
+    <>
+      <Navbar />
+      <div style={styles.container}>
+        <div style={styles.header}>
+          <h1 style={styles.title}>קצת עלינו...</h1>
+          <div style={styles.titleDecoration}></div>
+        </div>
+        
+        <div style={styles.content}>
+          <section style={styles.section}>
+            <div style={styles.sectionIcon}>
+              <i className="fas fa-users"></i>
+            </div>
+            <div style={styles.sectionContent}>
+              <h2 style={styles.subtitle}>מי אנחנו?</h2>
+              <p style={styles.text}>
+              ב-Wedding Planner אנחנווו מאמינים שכל סיפור אהבה ראוי לחתונה מהחלומות. לכן יצרנו עבורכם פלטפורמה שתלווה אתכם צעד אחר 
+              צעד – מההצעה המרגשת ועד לריקוד הראשון. עם מגוון ספקים איכותיים, טיפים שיחסכו 
+              לכם כאבי ראש וכלים שיעזרו לשמור על סדר ותקציב,
+               אנחנו כאן כדי שתוכלו להתמקד בדבר הכי חשוב – האהבה שלכם.
+              </p>
+            </div>
+          </section>
 
-        <section style={styles.section}>
-          <div style={styles.sectionIcon}>
-            <i className="fas fa-clipboard-list"></i>
-          </div>
-          <div style={styles.sectionContent}>
-            <h2 style={styles.subtitle}>השירותים שלנו</h2>
-            <ul style={styles.list}>
-              <li style={styles.listItem}>
-                <i className="fas fa-search" style={styles.listIcon}></i>
-                <span>חיפוש וסינון ספקים לפי קטגוריות</span>
-              </li>
-              <li style={styles.listItem}>
-                <i className="fas fa-wallet" style={styles.listIcon}></i>
-                <span>כלים לניהול תקציב החתונה</span>
-              </li>
-              <li style={styles.listItem}>
-                <i className="fas fa-tasks" style={styles.listIcon}></i>
-                <span>רשימת משימות אינטראקטיבית</span>
-              </li>
-              <li style={styles.listItem}>
-                <i className="fas fa-comment-dots" style={styles.listIcon}></i>
-                <span>טיפים והמלצות מזוגות אחרים</span>
-              </li>
-              <li style={styles.listItem}>
-                <i className="fas fa-envelope-open-text" style={styles.listIcon}></i>
-                <span>מערכת ניהול הזמנות דיגיטלית</span>
-              </li>
-            </ul>
-          </div>
-        </section>
+          <section style={styles.section}>
+            <div style={styles.sectionIcon}>
+              <i className="fas fa-clipboard-list"></i>
+            </div>
+            <div style={styles.sectionContent}>
+              <h2 style={styles.subtitle}>השירותים שלנו</h2>
+              <ul style={styles.list}>
+                <li style={styles.listItem}>
+                  <i className="fas fa-search" style={styles.listIcon}></i>
+                  <span>חיפוש וסינון ספקים לפי קטגוריות</span>
+                </li>
+                <li style={styles.listItem}>
+                  <i className="fas fa-wallet" style={styles.listIcon}></i>
+                  <span>כלים לניהול תקציב החתונה</span>
+                </li>
+                <li style={styles.listItem}>
+                  <i className="fas fa-tasks" style={styles.listIcon}></i>
+                  <span>רשימת משימות אינטראקטיבית</span>
+                </li>
+                <li style={styles.listItem}>
+                  <i className="fas fa-comment-dots" style={styles.listIcon}></i>
+                  <span>טיפים והמלצות מזוגות אחרים</span>
+                </li>
+                <li style={styles.listItem}>
+                  <i className="fas fa-envelope-open-text" style={styles.listIcon}></i>
+                  <span>מערכת ניהול הזמנות דיגיטלית</span>
+                </li>
+              </ul>
+            </div>
+          </section>
 
-        <section style={styles.section}>
-          <div 
-            style={{...styles.sectionIcon, cursor: 'pointer'}}
-            onClick={navigateToContact}
-          >
-            <i className="fas fa-phone-alt"></i>
-          </div>
-          <div style={styles.sectionContent}>
-            <h2 style={styles.subtitle}>
-              <Link href="/#section-contact" style={styles.contactLink}>צרו קשר</Link>
-            </h2>
-            <div style={styles.contactInfo}>
-              <div style={styles.contactItem}>
-                <i className="fas fa-phone" style={styles.contactIcon}></i>
-                <span>03-1234567</span>
-              </div>
-              <div style={styles.contactItem}>
-                <i className="fas fa-envelope" style={styles.contactIcon}></i>
-                <span>info@weddingplanner.co.il</span>
-              </div>
-              <div style={styles.contactItem}>
-                <i className="fas fa-map-marker-alt" style={styles.contactIcon}></i>
-                <span>רחוב האהבה 12, תל אביב</span>
-              </div>
-              <div style={styles.contactButtonContainer}>
-                <button 
-                  style={styles.contactButton}
-                  onClick={navigateToContact}
-                >
-                  עבור לדף צור קשר
-                </button>
+          <section style={styles.section}>
+            <div 
+              style={{...styles.sectionIcon, cursor: 'pointer'}}
+              onClick={navigateToContact}
+            >
+              <i className="fas fa-phone-alt"></i>
+            </div>
+            <div style={styles.sectionContent}>
+              <h2 style={styles.subtitle}>
+                <Link href="/#section-contact" style={styles.contactLink}>צרו קשר</Link>
+              </h2>
+              <div style={styles.contactInfo}>
+                <div style={styles.contactItem}>
+                  <i className="fas fa-phone" style={styles.contactIcon}></i>
+                  <span>03-1234567</span>
+                </div>
+                <div style={styles.contactItem}>
+                  <i className="fas fa-envelope" style={styles.contactIcon}></i>
+                  <span>info@weddingplanner.co.il</span>
+                </div>
+                <div style={styles.contactItem}>
+                  <i className="fas fa-map-marker-alt" style={styles.contactIcon}></i>
+                  <span>רחוב האהבה 12, תל אביב</span>
+                </div>
+                <div style={styles.contactButtonContainer}>
+                  <button 
+                    style={styles.contactButton}
+                    onClick={navigateToContact}
+                  >
+                    עבור לדף צור קשר
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        </div>
 
-      <div style={styles.footer}>
-        <div style={styles.socialLinks}>
-          <a href="#" style={styles.socialLink}>
-            <i className="fab fa-facebook-f"></i>
-          </a>
-          <a href="#" style={styles.socialLink}>
-            <i className="fab fa-instagram"></i>
-          </a>
-          <a href="#" style={styles.socialLink}>
-            <i className="fab fa-pinterest"></i>
-          </a>
+        <div style={styles.footer}>
+          <div style={styles.socialLinks}>
+            <a href="#" style={styles.socialLink}>
+              <i className="fab fa-facebook-f"></i>
+            </a>
+            <a href="#" style={styles.socialLink}>
+              <i className="fab fa-instagram"></i>
+            </a>
+            <a href="#" style={styles.socialLink}>
+              <i className="fab fa-pinterest"></i>
+            </a>
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 

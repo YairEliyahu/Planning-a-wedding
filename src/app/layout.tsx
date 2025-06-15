@@ -36,18 +36,19 @@ const heebo = Heebo({
 export const metadata: Metadata = {
   title: 'Wedding Planner',
   description: 'כלי מקיף לתכנון חתונה מושלמת - נהלו את האורחים, הספקים, והתקציב שלכם בצורה קלה ואינטואיטיבית.',
-  viewport: {
-    width: 'device-width',
-    initialScale: 1,
-    maximumScale: 5,
-    userScalable: true,
-    viewportFit: 'cover',
-  },
   icons: {
     icon: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
     shortcut: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
     apple: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
   },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
