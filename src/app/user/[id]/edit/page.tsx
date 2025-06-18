@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
-import LoadingSpinner from '../../../components/LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import Navbar from '@/components/Navbar';
 
 interface UserProfile {
   _id: string;
@@ -289,8 +290,10 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.content}>
+    <>
+      <Navbar />
+      <div style={styles.container}>
+        <div style={styles.content}>
         <h1 style={styles.title}>עריכת פרופיל</h1>
         
         {successMessage && (
@@ -552,75 +555,153 @@ export default function EditProfilePage({ params }: { params: { id: string } }) 
             </div>
           </div>
 
-          <button type="submit" style={styles.submitButton}>
+          <button type="submit" style={styles.button}>
             שמור שינויים
           </button>
         </form>
       </div>
     </div>
+    </>
   );
 }
 
 const styles = {
   container: {
-    maxWidth: '1200px',
-    margin: '20px auto',
-    padding: '2rem',
+    minHeight: '100vh',
+    background: 'linear-gradient(135deg, #ffe4ec 0%, #fff 60%, #ffe4ec 100%)',
+    padding: '0',
+    margin: '0',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
   },
   content: {
-    backgroundColor: '#fff',
-    padding: '2rem',
-    borderRadius: '8px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  },
-  form: {
+    background: 'rgba(255,255,255,0.95)',
+    backdropFilter: 'blur(8px)',
+    borderRadius: '2rem',
+    boxShadow: '0 8px 32px 0 rgba(245, 158, 158, 0.12)',
+    border: '1.5px solid #fbcfe8',
+    padding: '2.5rem 2rem',
+    marginTop: '3rem',
+    maxWidth: '540px',
     width: '100%',
+    position: 'relative',
   },
   title: {
-    fontSize: '2rem',
-    color: '#333',
+    fontSize: '2.2rem',
+    fontWeight: 800,
     marginBottom: '2rem',
-    textAlign: 'center' as const,
+    background: 'linear-gradient(90deg, #f472b6 0%, #f9a8d4 100%)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+    textAlign: 'center',
+    letterSpacing: '0.02em',
+  },
+  form: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2rem',
   },
   gridContainer: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+    gridTemplateColumns: '1fr',
     gap: '2rem',
-    marginBottom: '2rem',
   },
   section: {
-    backgroundColor: '#f8f9fa',
-    padding: '1.5rem',
-    borderRadius: '8px',
+    background: 'rgba(255,245,248,0.7)',
+    borderRadius: '1.5rem',
+    padding: '1.5rem 1rem',
+    boxShadow: '0 2px 8px 0 #fbcfe8',
+    border: '1px solid #fbcfe8',
   },
   sectionTitle: {
-    fontSize: '1.25rem',
-    color: '#333',
-    marginBottom: '1.5rem',
+    fontSize: '1.2rem',
+    fontWeight: 700,
+    color: '#be185d',
+    marginBottom: '1.2rem',
+    letterSpacing: '0.01em',
   },
   fieldContainer: {
-    marginBottom: '1rem',
-  },
-  partnerEmailContainer: {
-    marginBottom: '1rem',
-  },
-  partnerEmailWrapper: {
     display: 'flex',
-    flexDirection: 'row' as const,
+    flexDirection: 'column',
+    gap: '0.5rem',
+    marginBottom: '1.2rem',
   },
   label: {
-    display: 'block',
-    fontSize: '0.9rem',
-    color: '#666',
-    marginBottom: '0.5rem',
+    fontWeight: 500,
+    color: '#be185d',
+    fontSize: '1rem',
+    marginBottom: '0.2rem',
   },
   input: {
-    width: '100%',
-    padding: '0.75rem',
-    borderRadius: '4px',
-    border: '1px solid #ddd',
+    border: '1.5px solid #fbcfe8',
+    borderRadius: '999px',
+    padding: '0.7rem 1.2rem',
     fontSize: '1rem',
-    transition: 'border-color 0.3s ease',
+    outline: 'none',
+    transition: 'border 0.2s',
+    background: '#fff',
+    color: '#be185d',
+    fontWeight: 500,
+    boxShadow: '0 1px 4px 0 #fbcfe8',
+  },
+  successMessage: {
+    background: 'linear-gradient(90deg, #f9a8d4 0%, #fbcfe8 100%)',
+    color: '#be185d',
+    borderRadius: '999px',
+    padding: '0.8rem 1.2rem',
+    textAlign: 'center',
+    fontWeight: 700,
+    marginBottom: '1.2rem',
+    fontSize: '1.1rem',
+    border: '1.5px solid #fbcfe8',
+    boxShadow: '0 2px 8px 0 #fbcfe8',
+  },
+  errorMessage: {
+    background: 'linear-gradient(90deg, #fca5a5 0%, #fbcfe8 100%)',
+    color: '#b91c1c',
+    borderRadius: '999px',
+    padding: '0.8rem 1.2rem',
+    textAlign: 'center',
+    fontWeight: 700,
+    marginBottom: '1.2rem',
+    fontSize: '1.1rem',
+    border: '1.5px solid #fca5a5',
+    boxShadow: '0 2px 8px 0 #fca5a5',
+  },
+  profileImageContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '1.5rem',
+  },
+  profileImage: {
+    width: '90px',
+    height: '90px',
+    borderRadius: '50%',
+    border: '3px solid #f472b6',
+    objectFit: 'cover',
+    boxShadow: '0 2px 8px 0 #fbcfe8',
+  },
+  button: {
+    background: 'linear-gradient(90deg, #f472b6 0%, #f9a8d4 100%)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '999px',
+    padding: '0.9rem 2.2rem',
+    fontSize: '1.1rem',
+    fontWeight: 700,
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px 0 #fbcfe8',
+    transition: 'background 0.2s, box-shadow 0.2s, transform 0.2s',
+    marginTop: '1.5rem',
+    marginBottom: '0.5rem',
+  },
+  buttonHover: {
+    background: 'linear-gradient(90deg, #f472b6 0%, #be185d 100%)',
+    boxShadow: '0 4px 16px 0 #fbcfe8',
+    transform: 'scale(1.04)',
   },
   preferencesSection: {
     marginTop: '2rem',
@@ -645,35 +726,6 @@ const styles = {
     fontSize: '0.9rem',
     color: '#666',
   },
-  submitButton: {
-    backgroundColor: '#0070f3',
-    color: '#fff',
-    padding: '0.75rem 1.5rem',
-    borderRadius: '4px',
-    border: 'none',
-    fontSize: '1rem',
-    fontWeight: '500',
-    cursor: 'pointer',
-    transition: 'background-color 0.3s ease',
-    width: '100%',
-    marginTop: '2rem',
-  },
-  successMessage: {
-    backgroundColor: '#d4edda',
-    color: '#155724',
-    padding: '1rem',
-    borderRadius: '4px',
-    marginBottom: '1rem',
-    textAlign: 'center' as const,
-  },
-  errorMessage: {
-    backgroundColor: '#f8d7da',
-    color: '#721c24',
-    padding: '1rem',
-    borderRadius: '4px',
-    marginBottom: '1rem',
-    textAlign: 'center' as const,
-  },
   inviteMessage: {
     fontSize: '0.8rem',
     color: '#FF8C00',
@@ -687,16 +739,5 @@ const styles = {
   loadingSpinner: {
     textAlign: 'center' as const,
     padding: '2rem',
-  },
-  profileImageContainer: {
-    textAlign: 'center' as const,
-    marginBottom: '2rem',
-  },
-  profileImage: {
-    width: '100px',
-    height: '100px',
-    borderRadius: '50%',
-    objectFit: 'cover' as const,
-    border: '3px solid #0070f3',
   },
 }; 

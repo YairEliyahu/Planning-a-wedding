@@ -4,12 +4,17 @@ import Guest from '@/models/Guest';
 import mongoose from 'mongoose';
 import User from '@/models/User';
 
-// מטמון עבור חיבור למסד הנתונים
-let dbConnection: mongoose.Connection | null = null;
 
-// מטמון עבור רשימת אורחים
-const guestsCache = new Map<string, { data: GuestType[]; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 דקות
+
+// מטמון משופר עבור רשימת אורחים עם TTL דינמי
+const guestsCache = new Map<string, { 
+  data: GuestType[]; 
+  timestamp: number; 
+  etag: string;
+  count: number;
+}>();
+const CACHE_TTL = 2 * 60 * 1000; // 2 דקות - קצר יותר לביצועים טובים יותר
+const MAX_CACHE_SIZE = 100; // הגבלת גודל המטמון
 
 // Define a basic guest type for our use
 export type GuestType = {
@@ -27,223 +32,224 @@ export type GuestType = {
   updatedAt: Date;
 };
 
+// פונקציה לניקוי מטמון ישן
+function cleanOldCacheEntries() {
+  const now = Date.now();
+  for (const [key, value] of guestsCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL * 2) {
+      guestsCache.delete(key);
+    }
+  }
+  
+  // הגבלת גודל המטמון
+  if (guestsCache.size > MAX_CACHE_SIZE) {
+    const entries: Array<[string, { data: GuestType[]; timestamp: number; etag: string; count: number; }]> = [];
+    for (const entry of guestsCache.entries()) {
+      entries.push(entry);
+    }
+    entries.sort((a, b) => a[1].timestamp - b[1].timestamp);
+    
+    // מחק את הישנים ביותר
+    const toDelete = entries.slice(0, entries.length - MAX_CACHE_SIZE);
+    toDelete.forEach(([key]) => guestsCache.delete(key));
+  }
+}
+
+// פונקציה ליצירת ETag עבור נתונים - תיקון בעיה עם מערך ריק
+function generateETag(data: GuestType[]): string {
+  if (!data || data.length === 0) {
+    return `"empty-${Date.now()}"`;
+  }
+  
+  try {
+    const lastModified = Math.max(...data.map(guest => 
+      new Date(guest.updatedAt).getTime()
+    ));
+    return `"${lastModified}-${data.length}"`;
+  } catch (error) {
+    console.warn('[GUEST API] Error generating ETag:', error);
+    return `"fallback-${Date.now()}-${data.length}"`;
+  }
+}
+
 // GET /api/guests - Get all guests for the authenticated user
 export async function GET(req: NextRequest) {
+  console.log('[GUEST API] Starting GET request');
+  
   try {
-    // Get the user ID from the query parameters
     const userId = req.nextUrl.searchParams.get('userId');
-    // בדיקה האם סנכרון כפוי נדרש
     const forceSync = req.nextUrl.searchParams.get('forceSync') === 'true';
+    const clientETag = req.headers.get('if-none-match');
+    
+    console.log(`[GUEST API] Request params - userId: ${userId}, forceSync: ${forceSync}`);
     
     if (!userId) {
+      console.error('[GUEST API] No userId provided');
       return NextResponse.json(
-        { message: 'User ID is required' },
+        { success: false, message: 'User ID is required' },
         { status: 400 }
       );
     }
 
     // בדיקת מטמון אם אין צורך בסנכרון כפוי
-    if (!forceSync) {
-      const cachedGuests = guestsCache.get(userId);
-      if (cachedGuests && Date.now() - cachedGuests.timestamp < CACHE_TTL) {
-        return NextResponse.json({
-          success: true,
-          guests: cachedGuests.data
-        });
+    const cacheKey = `guests-${userId}`;
+    const cachedData = guestsCache.get(cacheKey);
+    
+    if (!forceSync && cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
+      console.log(`[GUEST API] Returning cached data for user ${userId}`);
+      
+      // בדיקת ETag לביצועים טובים יותר
+      if (clientETag && clientETag === cachedData.etag) {
+        return new NextResponse(null, { status: 304 }); // Not Modified
       }
+      
+      return NextResponse.json({
+        success: true,
+        guests: cachedData.data,
+        cached: true,
+        count: cachedData.count
+      }, {
+        headers: {
+          'ETag': cachedData.etag,
+          'Cache-Control': 'public, max-age=120'
+        }
+      });
     }
 
-    // Connect to the database with caching
-    if (!dbConnection) {
-      await dbConnect();
-      dbConnection = mongoose.connection;
-    }
+    // Connect to database
+    console.log('[GUEST API] Connecting to database...');
+    await dbConnect();
 
-    // First, check if user has a connected account
-    const user = await User.findById(userId).lean() as {
-      _id: mongoose.Types.ObjectId;
-      sharedEventId?: string;
-      connectedUserId?: string;
-    };
+    // חיפוש משתמש עם פרויקציה מוגבלת לביצועים
+    console.log(`[GUEST API] Finding user ${userId}...`);
+    const user = await User.findById(userId)
+      .select('sharedEventId connectedUserId')
+      .lean() as {
+        _id: mongoose.Types.ObjectId;
+        sharedEventId?: string;
+        connectedUserId?: string;
+      };
+      
     if (!user) {
+      console.error(`[GUEST API] User ${userId} not found`);
       return NextResponse.json(
-        { message: 'User not found' },
+        { success: false, message: 'User not found' },
         { status: 404 }
       );
     }
 
-    // Using GuestType[] for our result
+    console.log(`[GUEST API] User found - sharedEventId: ${user.sharedEventId || 'none'}`);
+
     let guestsResult: GuestType[] = [];
     
-    // If user has a sharedEventId, query guests using that ID to get all guests for both accounts
     if (user.sharedEventId) {
-      console.log(`[GUEST API] User ${userId} has sharedEventId ${user.sharedEventId}, finding all shared guests`);
+      console.log(`[GUEST API] User ${userId} using sharedEventId ${user.sharedEventId}`);
       
-      // אם דרוש סנכרון כפוי, יש לבצע סנכרון חד פעמי עם מנגנון מיוחד שימנע כפילויות
-      if (forceSync && user.connectedUserId) {
-        console.log('[GUEST API] Force sync requested - performing one-time full sync');
-        try {
-          // חשוב: נשתמש במזהה המשותף לשניהם ונמנע מלהעתיק את האורחים פעמיים
-          
-          // 1. מצא את כל האורחים המשותפים לפי ID האירוע המשותף
-          // כל האורחים כבר נמצאים בדטאבייס, אבל אנחנו רוצים לאחד את הכפילויות
-          const sharedGuests = await Guest.find({ sharedEventId: user.sharedEventId }).lean();
-          
-          // 2. צור מפה של אורחים ייחודיים לפי שם (מפתח ראשי)
-          const uniqueGuests = new Map<string, {
-            latestGuest: GuestType;
-            instances: string[];
-            users: string[];
-          }>();
-          
-          // מעבר ראשון - אחד את כל האורחים לפי השם שלהם וזהה את האורח העדכני ביותר
-          for (const guest of sharedGuests) {
-            const typedGuest = guest as unknown as GuestType;
-            const guestName = typedGuest.name.trim();
-            
-            if (!uniqueGuests.has(guestName)) {
-              uniqueGuests.set(guestName, {
-                latestGuest: typedGuest,
-                instances: [typedGuest._id.toString()],
-                users: [typedGuest.userId.toString()]
-              });
-            } else {
-              const existingEntry = uniqueGuests.get(guestName)!;
-              
-              // הוסף את מזהה האורח למערך המזהים
-              existingEntry.instances.push(typedGuest._id.toString());
-              
-              // הוסף את מזהה המשתמש למערך המשתמשים אם הוא לא קיים כבר
-              if (!existingEntry.users.includes(typedGuest.userId.toString())) {
-                existingEntry.users.push(typedGuest.userId.toString());
-              }
-              
-              // בדוק אם זה האורח העדכני ביותר
-              if (typedGuest.updatedAt > existingEntry.latestGuest.updatedAt) {
-                existingEntry.latestGuest = typedGuest;
-              }
-            }
-          }
-          
-          console.log(`[GUEST API] Found ${uniqueGuests.size} unique guests from ${sharedGuests.length} total entries`);
-          
-          // מחק את כל האורחים הכפולים ושמור רק את האורח העדכני ביותר מכל שם
-          for (const [guestName, entry] of Array.from(uniqueGuests.entries())) {
-            // אם יש יותר ממופע אחד של האורח (כלומר יש כפילות)
-            if (entry.instances.length > 1) {
-              // שמור את המזהה של האורח העדכני ביותר
-              const latestGuestId = entry.latestGuest._id.toString();
-              
-              // מחק את כל המופעים האחרים (הכפולים) של האורח
-              for (const instanceId of entry.instances) {
-                if (instanceId !== latestGuestId) {
-                  await Guest.findByIdAndDelete(instanceId);
-                  console.log(`[GUEST API] Deleted duplicate guest: ${guestName} (ID: ${instanceId})`);
-                }
-              }
-              
-              // עדכן את האורח הנותר כך שיהיה משויך לאירוע המשותף
-              await Guest.findByIdAndUpdate(latestGuestId, {
-                sharedEventId: user.sharedEventId
-              });
-            }
-          }
-          
-          console.log('[GUEST API] Completed cleanup of duplicate guests');
-        } catch (error) {
-          console.error('[GUEST API] Error during force sync cleanup:', error);
+      // אופטימיזציה של שאילתת האורחים המשותפים
+      const query = { sharedEventId: user.sharedEventId };
+      const guestsProjection = {
+        name: 1,
+        phoneNumber: 1,
+        numberOfGuests: 1,
+        side: 1,
+        isConfirmed: 1,
+        notes: 1,
+        group: 1,
+        userId: 1,
+        sharedEventId: 1,
+        updatedAt: 1,
+        createdAt: 1
+      };
+      
+      try {
+        const sharedGuests = await Guest.find(query, guestsProjection)
+          .lean()
+          .sort({ updatedAt: -1, name: 1 })
+          .hint({ sharedEventId: 1, updatedAt: -1 }); // רמז לאינדקס
+        
+        console.log(`[GUEST API] Found ${sharedGuests.length} shared guests`);
+        
+        if (sharedGuests && sharedGuests.length > 0) {
+          // המרה ישירה ללא פונקציה נוספת
+          guestsResult = sharedGuests.map(guest => ({
+            _id: guest._id.toString(),
+            userId: guest.userId.toString(),
+            name: guest.name,
+            phoneNumber: guest.phoneNumber,
+            numberOfGuests: guest.numberOfGuests || 1,
+            side: guest.side,
+            isConfirmed: guest.isConfirmed,
+            notes: guest.notes || '',
+            group: guest.group,
+            sharedEventId: guest.sharedEventId,
+            createdAt: guest.createdAt,
+            updatedAt: guest.updatedAt
+          }));
         }
+      } catch (dbError) {
+        console.error('[GUEST API] Database error for shared guests:', dbError);
+        // המשך עם משתמש יחיד במקרה של שגיאה
+        console.log('[GUEST API] Falling back to single user query');
       }
+    }
+    
+    if (guestsResult.length === 0) {
+      // שאילתה רגילה למשתמש יחיד או fallback
+      console.log(`[GUEST API] Querying guests for single user ${userId}`);
       
-      // כעת קבל את כל האורחים המשותפים (אחרי הסנכרון והניקוי)
-      // פשוט השתמש ב-sharedEventId לקבלת כל האורחים
-      const sharedGuests = await Guest.find({ sharedEventId: user.sharedEventId })
-        .lean()
-        .sort({ updatedAt: -1 }); // מיון לפי תאריך עדכון אחרון
-      
-      console.log(`[GUEST API] Found ${sharedGuests.length} guests with sharedEventId ${user.sharedEventId}`);
-      
-      // Use the specialized organizing method with the shared guests
-      if (sharedGuests && sharedGuests.length > 0) {
-        // Type assertion to bypass strict type checking
-        // @ts-expect-error - Mongoose type compatibility issues
-        const result = await Guest.getOrganizedGuestList(userId, sharedGuests);
+      try {
+        const userGuests = await Guest.find({ userId: new mongoose.Types.ObjectId(userId) })
+          .lean()
+          .sort({ updatedAt: -1, name: 1 })
+          .hint({ userId: 1, updatedAt: -1 });
         
-        // התוצאה מכילה מבנה מורכב, נחלץ את המערך של האורחים
-        if (result && result.sides) {
-          // @ts-expect-error - Type compatibility issues with Mongoose documents
-          guestsResult = [
-            ...(result.sides['חתן'] || []),
-            ...(result.sides['כלה'] || []),
-            ...(result.sides['משותף'] || [])
-          ];
-        }
-      } else {
-        // FALLBACK: If no guests found by sharedEventId, try finding by userIds
-        console.log('[GUEST API] No guests found by sharedEventId, trying to find by userIds');
-        const userIds = [userId];
-        if (user.connectedUserId) {
-          userIds.push(user.connectedUserId);
-        }
-        
-        const guestsByUserId = await Guest.find({ 
-          userId: { $in: userIds.map(id => new mongoose.Types.ObjectId(id)) } 
-        })
-        .lean()
-        .sort({ updatedAt: -1 }); // מיון לפי תאריך עדכון אחרון
-        
-        console.log(`[GUEST API] Found ${guestsByUserId.length} guests by userIds`);
-        
-        // Update all found guests to include the sharedEventId
-        if (guestsByUserId.length > 0) {
-          for (const guest of guestsByUserId) {
-            const typedGuest = guest as unknown as GuestType;
-            if (!typedGuest.sharedEventId) {
-              await Guest.findByIdAndUpdate(typedGuest._id, { sharedEventId: user.sharedEventId });
-            }
-          }
-          
-          // Use the specialized organizing method
-          // @ts-expect-error - Mongoose type compatibility issues
-          const result = await Guest.getOrganizedGuestList(userId, guestsByUserId);
-          
-          // התוצאה מכילה מבנה מורכב, נחלץ את המערך של האורחים
-          if (result && result.sides) {
-            // @ts-expect-error - Type compatibility issues with Mongoose documents
-            guestsResult = [
-              ...(result.sides['חתן'] || []),
-              ...(result.sides['כלה'] || []),
-              ...(result.sides['משותף'] || [])
-            ];
-          }
-        }
+        console.log(`[GUEST API] Found ${userGuests.length} individual guests`);
+        guestsResult = userGuests.map(guest => guest as unknown as GuestType);
+      } catch (dbError) {
+        console.error('[GUEST API] Database error for individual guests:', dbError);
+        throw new Error('Failed to fetch guests from database');
       }
-    } else {
-      // Fallback: get guests only for this specific user
-      const userGuests = await Guest.find({ userId: new mongoose.Types.ObjectId(userId) })
-        .lean()
-        .sort({ updatedAt: -1 }); // מיון לפי תאריך עדכון אחרון
-      
-      console.log(`[GUEST API] Fallback: Found ${userGuests.length} guests for user ${userId}`);
-      
-      // נחזיר ישירות את המערך של האורחים
-      guestsResult = userGuests as unknown as GuestType[];
     }
 
+    // יצירת ETag וניקוי מטמון
+    const etag = generateETag(guestsResult);
+    cleanOldCacheEntries();
+    
     // שמירה במטמון
-    guestsCache.set(userId, {
+    guestsCache.set(cacheKey, {
       data: guestsResult,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      etag,
+      count: guestsResult.length
     });
 
+    // בדיקת ETag שוב אחרי טעינת הנתונים
+    if (clientETag && clientETag === etag) {
+      return new NextResponse(null, { status: 304 });
+    }
+
+    console.log(`[GUEST API] Successfully returning ${guestsResult.length} guests for user ${userId}`);
+    
     return NextResponse.json({
       success: true,
-      guests: guestsResult
+      guests: guestsResult,
+      count: guestsResult.length,
+      fromCache: false
+    }, {
+      headers: {
+        'ETag': etag,
+        'Cache-Control': 'public, max-age=120'
+      }
     });
+
   } catch (error) {
     console.error('[GUEST API] Error fetching guests:', error);
     return NextResponse.json(
-      { message: 'Failed to fetch guests', error: (error as Error).message },
+      { 
+        success: false, 
+        message: 'Failed to fetch guests',
+        error: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Internal server error'
+      },
       { status: 500 }
     );
   }

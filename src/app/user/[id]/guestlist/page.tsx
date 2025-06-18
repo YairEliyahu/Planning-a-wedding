@@ -228,74 +228,125 @@ export default function GuestlistPage({ params }: { params: { id: string } }) {
 
   const fetchGuestlist = async () => {
     try {
-      console.log(`Attempting to fetch guestlist for user: ${params.id}`);
-      console.log('User connected status:', user?.connectedUserId ? `Connected to user ${user.connectedUserId}` : 'Not connected');
-      console.log('SharedEventId:', user?.sharedEventId || 'None');
+      console.log('*** Starting fetchGuestlist ***');
+      setIsLoading(true);
+      setError('');
       
-      // נקה את זיכרון המטמון לגבי רשימת המוזמנים
-      const cacheKey = `guests-${params.id}`;
-      dataCache.delete(cacheKey);
+      // אופטימיזציה: בדיקת מטמון מקומי קודם
+      const cacheKey = `guestlist-${params.id}`;
+      const cachedData = dataCache.get(cacheKey);
       
-      // הוסף פרמטר timestamp כדי למנוע קאשינג בדפדפן
-      const timestamp = new Date().getTime();
-      const forceSyncParam = user?.connectedUserId ? 'forceSync=true' : '';
-      const response = await fetch(`/api/guests?userId=${params.id}&t=${timestamp}&${forceSyncParam}`, {
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        }
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('API response structure:', JSON.stringify(data, null, 2));
-      
-      // בדיקת מבנה הנתונים החוזרים
-      if (!data || !data.guests) {
-        console.error('Invalid API response:', data);
-        setGuests([]);
+      if (cachedData && Date.now() - cachedData.timestamp < 30000) { // 30 שניות מטמון
+        console.log('Using cached guest data');
+        setGuests(cachedData.data);
+        setIsLoading(false);
         return;
       }
+
+      console.log(`Fetching guests for user: ${params.id}`);
       
-      // בדיקה אם guests הוא מערך ישירות או מבנה מורכב יותר
-      let fetchedGuests = [];
+      // בקשה מותאמה עם headers לביצועים
+      const response = await fetch(`/api/guests?userId=${params.id}`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Content-Type': 'application/json'
+        },
+        // אוטומטית מחדש בקשה במקרה של שגיאת רשת
+        signal: AbortSignal.timeout(15000) // timeout של 15 שניות
+      });
       
-      if (Array.isArray(data.guests)) {
-        // אם זה מערך ישיר
-        fetchedGuests = data.guests;
-        console.log('Guests are in array format:', fetchedGuests.length);
-      } else if (data.guests.sides) {
-        // אם זה מבנה מורכב עם צדדים
-        fetchedGuests = [
-          ...data.guests.sides['חתן'],
-          ...data.guests.sides['כלה'],
-          ...data.guests.sides['משותף']
-        ];
-        console.log('Combined guests from sides:', fetchedGuests.length);
+      console.log(`API response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`API error - Status: ${response.status}, Text: ${errorText}`);
+        throw new Error(`שגיאה בטעינת האורחים (${response.status}): ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('API response data:', data);
+      
+      if (!data.success) {
+        console.error('API returned unsuccessful response:', data);
+        throw new Error(data.message || 'התקבלה תגובה לא תקינה מהשרת');
+      }
+
+      let fetchedGuests: Guest[] = [];
+      
+      // טיפול בפורמטים שונים של תגובת API
+      if (data.guests) {
+        if (Array.isArray(data.guests)) {
+          fetchedGuests = data.guests;
+          console.log('Guests are in array format:', fetchedGuests.length);
+        } else if (data.guests.sides) {
+          // אם זה מבנה מורכב עם צדדים
+          fetchedGuests = [
+            ...(data.guests.sides['חתן'] || []),
+            ...(data.guests.sides['כלה'] || []),
+            ...(data.guests.sides['משותף'] || [])
+          ];
+          console.log('Combined guests from sides:', fetchedGuests.length);
+        } else {
+          console.error('Unexpected guests format:', data.guests);
+          throw new Error('פורמט נתונים לא צפוי מהשרת');
+        }
       } else {
-        console.error('Unexpected guests format:', data.guests);
+        console.log('No guests data in response, setting empty array');
+        fetchedGuests = [];
       }
       
       if (fetchedGuests.length > 0) {
         console.log('First guest in list:', fetchedGuests[0]);
       }
       
+      // ולידציה של נתוני האורחים
+      const validatedGuests = fetchedGuests.filter(guest => {
+        if (!guest || typeof guest !== 'object') {
+          console.warn('Invalid guest object:', guest);
+          return false;
+        }
+        if (!guest.name || typeof guest.name !== 'string') {
+          console.warn('Guest without valid name:', guest);
+          return false;
+        }
+        return true;
+      });
+      
+      if (validatedGuests.length !== fetchedGuests.length) {
+        console.warn(`Filtered out ${fetchedGuests.length - validatedGuests.length} invalid guests`);
+      }
+
       // הסרת אורחי דוגמה אם קיימים
-      const cleanedGuests = await removeExampleGuests([...fetchedGuests]);
+      const cleanedGuests = await removeExampleGuests([...validatedGuests]);
       
       console.log('Setting guests state with:', cleanedGuests.length, 'guests');
-      if (cleanedGuests.length > 0) {
-        console.log('Example guest:', cleanedGuests[0]);
-      }
+      
+      // שמירה במטמון מקומי
+      dataCache.set(cacheKey, {
+        data: cleanedGuests,
+        timestamp: Date.now()
+      });
+      
       setGuests(cleanedGuests);
+      
     } catch (error) {
       console.error('Error in fetchGuestlist:', error);
-      setError('שגיאה בטעינת רשימת האורחים');
+      
+      // טיפול ספציפי בשגיאות שונות
+      if (error.name === 'AbortError') {
+        setError('הבקשה נקטעה - אנא נסה שוב');
+      } else if (error.message?.includes('TypeError')) {
+        setError('בעיית חיבור לשרת - בדוק את החיבור לאינטרנט');
+      } else {
+        const errorMessage = error instanceof Error ? error.message : 'שגיאה לא ידועה בטעינת רשימת האורחים';
+        setError(errorMessage);
+      }
+      
       setGuests([]);
+    } finally {
+      setIsLoading(false);
     }
   };
   

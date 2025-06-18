@@ -34,18 +34,33 @@ async function connectToDatabase() {
     const opts = {
       bufferCommands: false,
       dbName: 'WeddingApp',
-      // הוספת אופציות ביצועים
-      connectTimeoutMS: 10000, // הגבלת זמן חיבור ל-10 שניות
-      maxPoolSize: 10, // גודל פול החיבורים המקסימלי
-      minPoolSize: 5,  // גודל פול החיבורים המינימלי
-      serverSelectionTimeoutMS: 5000, // זמן המתנה לבחירת שרת
-      socketTimeoutMS: 45000, // זמן מקסימלי לשאילתות
+      // אופטימיזציה של הגדרות ביצועים
+      connectTimeoutMS: 5000, // קיצור זמן חיבור ל-5 שניות
+      maxPoolSize: 20, // הגדלת גודל פול החיבורים
+      minPoolSize: 5,  
+      serverSelectionTimeoutMS: 3000, // קיצור זמן בחירת שרת
+      socketTimeoutMS: 20000, // קיצור זמן timeout
+      maxIdleTimeMS: 30000, // סגירת חיבורים לא פעילים אחרי 30 שניות
+      // אופטימיזציות נוספות לביצועים
+      retryWrites: true,
+      w: 'majority',
+      readPreference: 'primaryPreferred' as const, // קריאה מהראשי בעדיפות
+      compressors: ['zlib' as const], // דחיסת נתונים
+      zlibCompressionLevel: 6 as const,
+      // הגדרות heartbeat מותאמות
+      heartbeatFrequencyMS: 10000,
+      
     };
 
     console.time('mongodb-connect');
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongooseInstance) => {
+    cached.promise = mongoose.connect(MONGODB_URI!, opts as mongoose.ConnectOptions).then((mongooseInstance) => {
       console.timeEnd('mongodb-connect');
       console.log('Connected to MongoDB successfully');
+      
+      // הגדרת אופטימיזציות נוספות
+      mongoose.set('strictQuery', false);
+      mongoose.set('runValidators', true);
+      
       return mongooseInstance;
     });
   }
@@ -84,6 +99,11 @@ mongoose.connection.on('reconnected', () => {
 
 mongoose.connection.on('timeout', () => {
   console.log('MongoDB connection timeout');
+});
+
+// ניטור ביצועים
+mongoose.connection.on('slow', () => {
+  console.warn('MongoDB slow operation detected');
 });
 
 export default connectToDatabase;

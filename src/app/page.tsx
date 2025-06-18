@@ -136,7 +136,7 @@ const styles = {
     display: 'inline-block',
   },
   secondaryButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'linear-gradient(to right, #ff4081, #ff9fb1)',
     color: '#ffffff',
     padding: '1rem 2.5rem',
     borderRadius: '50px',
@@ -387,13 +387,25 @@ export default function HomePage() {
   const contactSectionRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // תמונות רקע
+  // תמונות רקע אופטימליות מהמערכת החדשה - כל התמונות
   const backgroundImages = useMemo(() => [
-    '/images/wedding-background.jpg',
-    '/images/311691308_10223945859767494_4494901931895656765_n.jpg',
-    '/images/430853596_10226981026324761_6445618788012733513_n.jpg',
-    '/images/475104690_10229871826952970_7379256486698947066_n.jpg',
-    '/images/475280938_10229871827872993_8154661980827464805_n.jpg',
+    '/images/optimized/wedding-background-desktop.webp',
+    '/images/optimized/311691308-10223945859767494-4494901931895656765-n-desktop.webp',
+    '/images/optimized/430853596-10226981026324761-6445618788012733513-n-desktop.webp',
+    '/images/optimized/475014250-10229871827232977-2096674138714869119-n-desktop.webp',
+    '/images/optimized/475104690-10229871826952970-7379256486698947066-n-desktop.webp',
+    '/images/optimized/475228520-10229871829033022-3769026113180156921-n-desktop.webp',
+    '/images/optimized/475280938-10229871827872993-8154661980827464805-n-desktop.webp',
+    '/images/optimized/491287463-10230761110984515-9175002103466240573-n-desktop.webp',
+    '/images/optimized/491368543-10230761114224596-5615758961481695793-n-desktop.webp',
+    '/images/optimized/491925063-10230761111944539-1740955974887498068-n-desktop.webp',
+    '/images/optimized/492241865-10230761111704533-4473013884211757477-n-desktop.webp',
+    '/images/optimized/492387575-10230761113064567-1838080034329747177-n-desktop.webp',
+    '/images/optimized/505410641-10231342977170806-6902868596665224046-n-desktop.webp',
+    '/images/optimized/505459996-10231342973650718-4507722435496117637-n-desktop.webp',
+    '/images/optimized/506160913-10231342979130855-504971166919572198-n-desktop.webp',
+    '/images/optimized/82851581-10217659993624769-3848373469825728512-n-desktop.webp',
+    '/images/optimized/whatsapp-2024-11-04-14-15-14-fdbb7058-desktop.webp',
   ], []);
 
   // אנימציות לכיתוב מדורג
@@ -950,14 +962,18 @@ export default function HomePage() {
             <div className="absolute inset-0 bg-[#fbf7f3]/20 z-[1]" />
           </motion.div>
 
-          {/* תוכן ראשי מעל התמונה */}
-          <div className="relative z-[2] text-center text-white p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 max-w-5xl flex flex-col items-center justify-center mx-auto">
-            <div className="flex flex-col items-center mb-3 sm:mb-4 md:mb-5 lg:mb-6">
+          {/* תוכן ראשי מעל התמונה - טקסט צף מעל התמונות */}
+          <div className="relative z-[2] text-center p-3 sm:p-4 md:p-5 lg:p-6 xl:p-8 max-w-5xl flex flex-col items-center justify-center mx-auto">
+            <div className="flex flex-col items-center mb-4 sm:mb-6 md:mb-8 lg:mb-10">
               <motion.h1 
                 initial="hidden"
                 animate="visible"
                 variants={firstTitleVariants}
-                className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-0.5 sm:mb-1 text-shadow-lg font-[var(--font-playfair)] text-white leading-tight laptop-sm:text-5xl laptop-md:text-6xl"
+                className="text-3xl xs:text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-1 sm:mb-2 font-[var(--font-playfair)] text-white leading-tight laptop-sm:text-5xl laptop-md:text-6xl"
+                style={{ 
+                  textShadow: '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5), 0 0 40px rgba(0,0,0,0.3)',
+                  filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))'
+                }}
               >
                Create
               </motion.h1>
@@ -965,7 +981,11 @@ export default function HomePage() {
                 initial="hidden"
                 animate="visible"
                 variants={secondTitleVariants}
-                className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-0.5 sm:mb-1 text-shadow-lg font-[var(--font-playfair)] text-white/90 leading-tight laptop-sm:text-4xl laptop-md:text-5xl"
+                className="text-2xl xs:text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-1 sm:mb-2 font-[var(--font-playfair)] text-white/95 leading-tight laptop-sm:text-4xl laptop-md:text-5xl"
+                style={{ 
+                  textShadow: '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)',
+                  filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))'
+                }}
               >
                 Plan
               </motion.h2>
@@ -973,7 +993,11 @@ export default function HomePage() {
                 initial="hidden"
                 animate="visible"
                 variants={thirdTitleVariants}
-                className="text-xl xs:text-2xl sm:text-3xl md:text-3xl lg:text-4xl xl:text-5xl font-bold mb-4 sm:mb-6 text-shadow-lg font-[var(--font-playfair)] text-white/80 leading-tight laptop-sm:text-2xl laptop-md:text-3xl"
+                className="text-xl xs:text-2xl sm:text-3xl md:text-3xl lg:text-4xl xl:text-5xl font-bold mb-6 sm:mb-8 font-[var(--font-playfair)] text-white/90 leading-tight laptop-sm:text-2xl laptop-md:text-3xl"
+                style={{ 
+                  textShadow: '2px 2px 8px rgba(0,0,0,0.7), 0 0 20px rgba(0,0,0,0.5)',
+                  filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.5))'
+                }}
               >
                 Love
               </motion.h3>
@@ -983,22 +1007,26 @@ export default function HomePage() {
               initial="hidden"
               animate="visible"
               variants={subtitleVariants}
-              className="text-sm xs:text-base sm:text-lg md:text-xl lg:text-xl xl:text-2xl mb-6 sm:mb-8 lg:mb-10 text-shadow font-medium max-w-xl px-2 sm:px-4 laptop-sm:text-lg laptop-sm:mb-6"
+              className="text-sm xs:text-base sm:text-lg md:text-xl lg:text-xl xl:text-2xl mb-6 sm:mb-8 lg:mb-10 font-medium max-w-xl px-2 sm:px-4 text-white laptop-sm:text-lg laptop-sm:mb-6"
+              style={{ 
+                textShadow: '2px 2px 8px rgba(0,0,0,0.8), 0 0 20px rgba(0,0,0,0.6)',
+                filter: 'drop-shadow(0 4px 8px rgba(0,0,0,0.7))'
+              }}
             >
               הדרך הקלה לתכנן את החתונה המושלמת
             </motion.p>
             
-            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 lg:gap-5 justify-center items-center w-full max-w-sm sm:max-w-none px-2 sm:px-0 laptop-sm:gap-3">
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 lg:gap-6 justify-center items-center w-full max-w-sm sm:max-w-none px-2 sm:px-0 laptop-sm:gap-4">
               <motion.div 
                 initial="hidden"
                 animate="visible"
                 variants={buttonVariants}
                 whileHover="hover"
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto bg-transparent rounded-full"
               >
                 <Link 
                   href={user ? `/user/${user._id}` : '/login'} 
-                  className="inline-block w-full sm:w-auto bg-pink-500 text-white py-2.5 xs:py-3 sm:py-3 px-5 xs:px-6 sm:px-8 rounded-full text-sm xs:text-base sm:text-lg font-bold transition-all duration-300 border-2 border-transparent shadow-lg shadow-pink-500/30 text-center hover:bg-pink-600 hover:shadow-xl laptop-sm:py-2.5 laptop-sm:px-6 laptop-sm:text-base"
+                  className="group inline-block w-full sm:w-auto bg-gradient-to-r from-pink-500 to-pink-600 text-white py-3 xs:py-4 sm:py-4 px-6 xs:px-8 sm:px-10 rounded-full text-sm xs:text-base sm:text-lg font-bold transition-all duration-500 border-0 shadow-lg hover:shadow-2xl text-center hover:from-pink-600 hover:to-pink-700 hover:scale-105 transform laptop-sm:py-3 laptop-sm:px-8 laptop-sm:text-base"
                 >
                   התחל לתכנן
                 </Link>
@@ -1008,11 +1036,11 @@ export default function HomePage() {
                 animate="visible"
                 variants={buttonVariants}
                 whileHover="hover"
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto bg-transparent rounded-full"
               >
                 <Link 
                   href="#about-section" 
-                  className="inline-block w-full sm:w-auto bg-transparent text-white py-2.5 xs:py-3 sm:py-3 px-5 xs:px-6 sm:px-8 rounded-full text-sm xs:text-base sm:text-lg font-bold transition-all duration-300 border-2 border-white text-center hover:bg-white hover:text-pink-500 laptop-sm:py-2.5 laptop-sm:px-6 laptop-sm:text-base"
+                  className="group inline-block w-full sm:w-auto bg-gradient-to-r from-pink-400 to-pink-500 text-white py-3 xs:py-4 sm:py-4 px-6 xs:px-8 sm:px-10 rounded-full text-sm xs:text-base sm:text-lg font-bold transition-all duration-500 border-0 shadow-lg hover:shadow-2xl text-center hover:from-pink-500 hover:to-pink-600 hover:scale-105 transform laptop-sm:py-3 laptop-sm:px-8 laptop-sm:text-base"
                   onClick={(e) => {
                     e.preventDefault();
                     scrollToSection(1);

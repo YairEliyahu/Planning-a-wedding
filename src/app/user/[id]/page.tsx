@@ -319,7 +319,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-rose-50 via-pink-50 to-white">
       <Navbar />
       
       {/* התראה להגדרת סיסמה למשתמשי Google */}
@@ -351,42 +351,51 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* כרטיס ספירה לאחור */}
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6 text-center">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-purple-800 mb-4 px-2">
-            היי {profile.fullName} ו{profile.partnerName}
-          </h1>
-          <p className="text-base sm:text-lg lg:text-xl mb-4">היום הגדול מתקרב!</p>
+        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 p-6 sm:p-8 mb-8 text-center relative overflow-hidden">
+          {/* רקע דקורטיבי */}
+          <div className="absolute inset-0 bg-gradient-to-r from-pink-100/30 via-rose-100/20 to-pink-100/30"></div>
+          <div className="relative z-10">
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 bg-clip-text text-transparent mb-6 px-2">
+              היי {profile.fullName} ו{profile.partnerName} 💕
+            </h1>
+            <p className="text-lg sm:text-xl lg:text-2xl mb-6 text-gray-700 font-medium">היום הגדול מתקרב!</p>
           
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-6 mb-4 max-w-lg sm:max-w-none mx-auto">
-            <div className="text-center bg-gradient-to-br from-purple-50 to-pink-50 p-3 sm:p-4 rounded-lg">
-              <span className="block text-2xl sm:text-3xl lg:text-4xl font-bold text-purple-700">{timeLeft.days}</span>
-              <span className="text-xs sm:text-sm text-gray-600">ימים</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6 mb-6 max-w-2xl mx-auto">
+              <div className="text-center bg-gradient-to-br from-pink-100 to-rose-100 p-4 sm:p-6 rounded-2xl shadow-lg border border-pink-200/50 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <span className="block text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-pink-600 to-rose-500 bg-clip-text text-transparent">{timeLeft.days}</span>
+                <span className="text-sm sm:text-base text-gray-700 font-medium">ימים</span>
+              </div>
+              <div className="text-center bg-gradient-to-br from-rose-100 to-pink-100 p-4 sm:p-6 rounded-2xl shadow-lg border border-rose-200/50 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <span className="block text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-rose-600 to-pink-500 bg-clip-text text-transparent">{timeLeft.hours}</span>
+                <span className="text-sm sm:text-base text-gray-700 font-medium">שעות</span>
+              </div>
+              <div className="text-center bg-gradient-to-br from-pink-200 to-rose-200 p-4 sm:p-6 rounded-2xl shadow-lg border border-pink-300/50 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <span className="block text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-pink-700 to-rose-600 bg-clip-text text-transparent">{timeLeft.minutes}</span>
+                <span className="text-sm sm:text-base text-gray-700 font-medium">דקות</span>
+              </div>
+              <div className="text-center bg-gradient-to-br from-rose-200 to-pink-200 p-4 sm:p-6 rounded-2xl shadow-lg border border-rose-300/50 hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <span className="block text-3xl sm:text-4xl lg:text-5xl font-bold bg-gradient-to-r from-rose-700 to-pink-600 bg-clip-text text-transparent">{timeLeft.seconds}</span>
+                <span className="text-sm sm:text-base text-gray-700 font-medium">שניות</span>
+              </div>
             </div>
-            <div className="text-center bg-gradient-to-br from-blue-50 to-purple-50 p-3 sm:p-4 rounded-lg">
-              <span className="block text-2xl sm:text-3xl lg:text-4xl font-bold text-blue-700">{timeLeft.hours}</span>
-              <span className="text-xs sm:text-sm text-gray-600">שעות</span>
-            </div>
-            <div className="text-center bg-gradient-to-br from-green-50 to-blue-50 p-3 sm:p-4 rounded-lg">
-              <span className="block text-2xl sm:text-3xl lg:text-4xl font-bold text-green-700">{timeLeft.minutes}</span>
-              <span className="text-xs sm:text-sm text-gray-600">דקות</span>
-            </div>
-            <div className="text-center bg-gradient-to-br from-pink-50 to-red-50 p-3 sm:p-4 rounded-lg">
-              <span className="block text-2xl sm:text-3xl lg:text-4xl font-bold text-red-700">{timeLeft.seconds}</span>
-              <span className="text-xs sm:text-sm text-gray-600">שניות</span>
-            </div>
+          
+            <p className="text-base sm:text-lg text-gray-600 px-2 font-medium">
+              תאריך החתונה: {new Date(profile.weddingDate).toLocaleDateString('he-IL')}
+            </p>
           </div>
-          
-          <p className="text-sm sm:text-base text-gray-600 px-2">
-            תאריך החתונה: {new Date(profile.weddingDate).toLocaleDateString('he-IL')}
-          </p>
         </div>
 
         {/* Grid עם קטעים של ניתוח תקציב והארנק */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 mb-6">
-          {/* ניתוח תקציב */}
-          {budgetAnalysis.categories.length > 0 && (
-            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 xl:col-span-2">
-              <h3 className="text-lg sm:text-xl font-semibold mb-4">ניתוח תקציב</h3>
+                  {/* ניתוח תקציב */}
+        {budgetAnalysis.categories.length > 0 && (
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 p-6 sm:p-8 xl:col-span-2 relative overflow-hidden">
+              {/* רקע דקורטיבי */}
+            <div className="absolute top-0 left-0 w-40 h-40 bg-gradient-to-br from-rose-200/30 to-transparent rounded-full"></div>
+            <div className="relative z-10">
+              <h3 className="text-xl sm:text-2xl font-bold mb-6 bg-gradient-to-r from-rose-600 to-pink-500 bg-clip-text text-transparent flex items-center gap-2">
+                📊 ניתוח תקציב
+              </h3>
               <div className="w-full overflow-hidden">
                 <Bar
                   data={{
@@ -440,38 +449,60 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                 />
               </div>
             </div>
+          </div>
           )}
           
           {/* הארנק */}
-          <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-            <h3 className="text-lg sm:text-xl font-semibold mb-4">הארנק שלי</h3>
-            
-            <div className="space-y-3 sm:space-y-4 mb-4">
-              <div className="p-3 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
-                <p className="text-xs sm:text-sm text-gray-600">תקציב כולל</p>
-                <p className="text-lg sm:text-xl font-bold text-blue-700">₪{walletInfo.totalBudget.toLocaleString()}</p>
+          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 p-6 sm:p-8 relative overflow-hidden">
+            {/* רקע דקורטיבי */}
+            <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-pink-200/40 to-transparent rounded-full"></div>
+            <div className="relative z-10">
+              <h3 className="text-xl sm:text-2xl font-bold mb-6 bg-gradient-to-r from-pink-600 to-rose-500 bg-clip-text text-transparent flex items-center gap-2">
+                💳 הארנק שלי
+              </h3>
+              
+              <div className="space-y-4 mb-6">
+                <div className="p-4 bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl border border-pink-200/50 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">תקציב כולל</p>
+                      <p className="text-xl sm:text-2xl font-bold text-pink-700">₪{walletInfo.totalBudget.toLocaleString()}</p>
+                    </div>
+                    <div className="text-2xl">💰</div>
+                  </div>
+                </div>
+                <div className="p-4 bg-gradient-to-r from-rose-50 to-pink-50 rounded-xl border border-rose-200/50 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">הוצאות</p>
+                      <p className="text-xl sm:text-2xl font-bold text-rose-700">₪{walletInfo.spentBudget.toLocaleString()}</p>
+                    </div>
+                    <div className="text-2xl">💸</div>
+                  </div>
+                </div>
+                <div className="p-4 bg-gradient-to-r from-pink-100 to-rose-100 rounded-xl border border-pink-300/50 shadow-sm hover:shadow-md transition-all duration-300">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600 font-medium">נותר</p>
+                      <p className="text-xl sm:text-2xl font-bold text-pink-800">₪{walletInfo.remainingBudget.toLocaleString()}</p>
+                    </div>
+                    <div className="text-2xl">💎</div>
+                  </div>
+                </div>
               </div>
-              <div className="p-3 bg-gradient-to-r from-red-50 to-red-100 rounded-lg">
-                <p className="text-xs sm:text-sm text-gray-600">הוצאות</p>
-                <p className="text-lg sm:text-xl font-bold text-red-600">₪{walletInfo.spentBudget.toLocaleString()}</p>
+              
+              <div className="w-full bg-pink-100 rounded-full h-4 mb-4 shadow-inner">
+                <div 
+                  className="bg-gradient-to-r from-pink-400 via-rose-500 to-pink-600 h-4 rounded-full transition-all duration-500 shadow-sm"
+                  style={{ width: `${Math.min((walletInfo.spentBudget / walletInfo.totalBudget) * 100, 100)}%` }}
+                ></div>
               </div>
-              <div className="p-3 bg-gradient-to-r from-green-50 to-green-100 rounded-lg">
-                <p className="text-xs sm:text-sm text-gray-600">נותר</p>
-                <p className="text-lg sm:text-xl font-bold text-green-600">₪{walletInfo.remainingBudget.toLocaleString()}</p>
+            
+              <div className="text-center">
+                <p className="text-sm font-medium text-gray-600">
+                  {Math.round((walletInfo.spentBudget / walletInfo.totalBudget) * 100)}% מהתקציב נוצל
+                </p>
               </div>
-            </div>
-            
-            <div className="w-full bg-gray-200 rounded-full h-3 mb-4">
-              <div 
-                className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min((walletInfo.spentBudget / walletInfo.totalBudget) * 100, 100)}%` }}
-              ></div>
-            </div>
-            
-            <div className="text-center">
-              <p className="text-xs sm:text-sm text-gray-500">
-                {Math.round((walletInfo.spentBudget / walletInfo.totalBudget) * 100)}% מהתקציב נוצל
-              </p>
             </div>
           </div>
         </div>

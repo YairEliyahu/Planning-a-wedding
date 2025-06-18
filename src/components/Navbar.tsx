@@ -48,7 +48,7 @@ const Navbar = () => {
   };
 
   return (
-    <nav className="bg-white/95 shadow-lg backdrop-blur-md fixed w-full top-0 z-[1000] border-b border-black/5">
+    <nav className="bg-gradient-to-r from-pink-50 via-white to-rose-100/80 shadow-lg backdrop-blur-md fixed w-full top-0 z-[1000] border-b border-pink-100/40">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 lg:h-20 relative">
           
@@ -139,9 +139,9 @@ const Navbar = () => {
                   className="flex items-center gap-2"
                   {...fadeIn}
                 >
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
+                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse"></div>
+                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
+                  <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
                 </motion.div>
               ) : user ? (
                 <motion.div 
@@ -156,15 +156,15 @@ const Navbar = () => {
                     onClick={handleProfileClick} 
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 ${
                       user.isProfileComplete 
-                        ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                        : 'bg-red-500 text-white hover:bg-red-600'
+                        ? 'bg-pink-500 text-white hover:bg-pink-600' 
+                        : 'bg-rose-500 text-white hover:bg-rose-600'
                     }`}
                   >
                     {user.isProfileComplete ? 'הפרופיל שלי' : 'השלם פרופיל'}
                   </button>
                   <button 
                     onClick={handleLogout} 
-                    className="bg-red-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:bg-red-600"
+                    className="bg-rose-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:bg-rose-600"
                   >
                     התנתק
                   </button>
@@ -177,13 +177,13 @@ const Navbar = () => {
                 >
                   <Link 
                     href="/login" 
-                    className="bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:bg-blue-600"
+                    className="bg-pink-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:bg-pink-600"
                   >
                     התחבר
                   </Link>
                   <Link 
                     href="/register" 
-                    className="bg-green-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:bg-green-600"
+                    className="bg-rose-400 text-white px-4 py-2 rounded-md text-sm font-medium transition-all duration-300 hover:bg-rose-500"
                   >
                     הרשמה
                   </Link>
@@ -286,9 +286,9 @@ const Navbar = () => {
                     className="flex items-center justify-center gap-2 px-3 py-2"
                     {...fadeIn}
                   >
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
+                    <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse"></div>
+                    <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }}></div>
+                    <div className="w-2 h-2 bg-pink-400 rounded-full animate-pulse" style={{ animationDelay: '0.6s' }}></div>
                   </motion.div>
                 ) : user ? (
                   <motion.div 
@@ -303,15 +303,15 @@ const Navbar = () => {
                       onClick={handleProfileClick} 
                       className={`w-full px-4 py-2 rounded-md text-base font-medium transition-all duration-300 ${
                         user.isProfileComplete 
-                          ? 'bg-blue-500 text-white hover:bg-blue-600' 
-                          : 'bg-red-500 text-white hover:bg-red-600'
+                          ? 'bg-pink-500 text-white hover:bg-pink-600' 
+                          : 'bg-rose-500 text-white hover:bg-rose-600'
                       }`}
                     >
                       {user.isProfileComplete ? 'הפרופיל שלי' : 'השלם פרופיל'}
                     </button>
                     <button 
                       onClick={handleLogout} 
-                      className="w-full bg-red-500 text-white px-4 py-2 rounded-md text-base font-medium transition-all duration-300 hover:bg-red-600"
+                      className="w-full bg-rose-500 text-white px-4 py-2 rounded-md text-base font-medium transition-all duration-300 hover:bg-rose-600"
                     >
                       התנתק
                     </button>
@@ -324,14 +324,14 @@ const Navbar = () => {
                   >
                     <Link 
                       href="/login" 
-                      className="block w-full bg-blue-500 text-white px-4 py-2 rounded-md text-base font-medium text-center transition-all duration-300 hover:bg-blue-600"
+                      className="block w-full bg-pink-500 text-white px-4 py-2 rounded-md text-base font-medium text-center transition-all duration-300 hover:bg-pink-600"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       התחבר
                     </Link>
                     <Link 
                       href="/register" 
-                      className="block w-full bg-green-500 text-white px-4 py-2 rounded-md text-base font-medium text-center transition-all duration-300 hover:bg-green-600"
+                      className="block w-full bg-rose-400 text-white px-4 py-2 rounded-md text-base font-medium text-center transition-all duration-300 hover:bg-rose-500"
                       onClick={() => setIsMobileMenuOpen(false)}
                     >
                       הרשמה

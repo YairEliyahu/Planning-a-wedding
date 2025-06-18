@@ -12,7 +12,10 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "cypress:open": "cypress open",
-    "cypress:run": "cypress run"
+    "cypress:run": "cypress run",
+    "optimize-images": "node scripts/optimize-images.js",
+    "setup-images": "npm run optimize-images",
+    "add-images": "node scripts/add-new-images.js"
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^6.7.2",
@@ -75,6 +78,7 @@
     "msw": "^2.8.6",
     "postcss": "^8.4.49",
     "prettier": "^3.3.3",
+    "sharp": "^0.33.5",
     "tailwindcss": "^3.4.17",
     "typescript-plugin-css-modules": "^5.1.0",
     "whatwg-fetch": "^3.6.20"
