@@ -4,14 +4,18 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
 import LoadingSpinner from '@/components/LoadingSpinner';
+import { useOptimizedMultiFetch } from '@/hooks/useOptimizedFetch';
+import { PerformanceMonitor } from '@/utils/performance';
+import dynamic from 'next/dynamic';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement);
-
-// קאש לנתונים - מונע בקשות חוזרות
-const dataCache = new Map();
+// Lazy load heavy components
+const LazyChartComponent = dynamic(() => import('@/components/LazyChartComponent'), {
+  ssr: false,
+  loading: () => <div className="h-64 flex items-center justify-center">
+    <LoadingSpinner size="md" text="טוען תרשים..." />
+  </div>
+});
 
 interface UserProfile {
   _id: string;
@@ -78,18 +82,10 @@ interface ChecklistCategory {
   items: ChecklistItem[];
 }
 
-interface Transaction {
-  itemName: string;
-  amount: number;
-  date: string;
-}
-
 export default function UserProfilePage({ params }: { params: { id: string } }) {
   const { user, isAuthReady } = useAuth();
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [walletInfo, setWalletInfo] = useState<WalletInfo>({
     totalBudget: 0,
@@ -103,81 +99,74 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     categories: []
   });
 
-  // פונקציה שמחזירה נתונים מהקאש או מבצעת בקשה חדשה
-  const fetchWithCache = async (url: string, cacheKey: string) => {
-    if (dataCache.has(cacheKey)) {
-      return dataCache.get(cacheKey);
+  // Use optimized multi-fetch for all data
+  const apiUrls = [
+    `/api/user/${params.id}`,
+    `/api/wedding-checklist/${params.id}`,
+    `/api/wedding-preferences/${params.id}`
+  ];
+
+  const { data, loading, errors, refetchAll } = useOptimizedMultiFetch(
+    apiUrls,
+    {
+      cacheKey: `user-profile-${params.id}`,
+      cacheTTL: 5 * 60 * 1000, // 5 minutes cache
+      retries: 2,
+      timeout: 8000
     }
-    
-    const response = await fetch(url);
-    const data = await response.json();
-    
-    if (response.ok) {
-      dataCache.set(cacheKey, data);
-    }
-    
-    return data;
-  };
+  );
+
+  const [profileData, checklistData] = data;
 
   useEffect(() => {
-    // להמנע מבדיקות מיותרות אם הנתונים כבר נטענו
-    if (profile && !isLoading) return;
+    if (!isAuthReady) return;
 
-    const checkAuth = async () => {
-      if (!isAuthReady) {
-        return;
-      }
-
-      if (!user) {
-        router.push('/login');
-        return;
-      }
-
-      if (user._id !== params.id) {
-        router.push(`/user/${user._id}`);
-        return;
-      }
-
-      await loadUserData();
-    };
-
-    checkAuth();
-  }, [isAuthReady, user, params.id, router, isLoading, profile]);
-
-  // פונקציה המאגדת את כל בקשות הנתונים
-  const loadUserData = async () => {
-    setIsLoading(true);
-    try {
-      // בקשות מקבילות עם Promise.all
-      const [profileData, checklistData] = await Promise.all([
-        fetchUserProfile(),
-        fetchChecklistData(),
-        fetchWeddingPreferences()
-      ]);
-
-      if (!profileData?.user?.isProfileComplete) {
-        router.push('/complete-profile');
-        return;
-      }
-
-      setProfile(profileData.user);
-      processChecklistData(checklistData);
-    } catch (err) {
-      setError('אירעה שגיאה בטעינת הנתונים');
-    } finally {
-      setIsLoading(false);
+    if (!user) {
+      router.push('/login');
+      return;
     }
-  };
 
-  const fetchChecklistData = async () => {
-    try {
-      const cacheKey = `checklist-${params.id}`;
-      const data = await fetchWithCache(`/api/wedding-checklist/${params.id}`, cacheKey);
-      return data;
-    } catch (error) {
-      return null;
+    if (user._id !== params.id) {
+      router.push(`/user/${user._id}`);
+      return;
     }
-  };
+  }, [isAuthReady, user, params.id, router]);
+
+  useEffect(() => {
+    if (!profileData) return;
+    
+    const userData = profileData as any;
+    if (!userData.user) return;
+
+    PerformanceMonitor.startTimer('profile-processing');
+
+    // Check if profile is complete
+    if (userData.user.isProfileComplete === false) {
+      console.log('Profile not complete, redirecting to complete-profile');
+      router.push('/complete-profile');
+      return;
+    }
+
+    console.log('Profile is complete, processing user data');
+    setProfile(userData.user);
+    
+    if (userData.user.weddingDate) {
+      startWeddingCountdown(userData.user.weddingDate);
+    }
+
+    PerformanceMonitor.endTimer('profile-processing');
+  }, [profileData, router]);
+
+  useEffect(() => {
+    if (!checklistData) return;
+    
+    const checklistInfo = checklistData as any;
+    if (!checklistInfo.checklist) return;
+
+    PerformanceMonitor.startTimer('checklist-processing');
+    processChecklistData(checklistInfo);
+    PerformanceMonitor.endTimer('checklist-processing');
+  }, [checklistData]);
 
   const processChecklistData = (data: { checklist?: ChecklistCategory[] }) => {
     if (!data?.checklist) return;
@@ -205,51 +194,19 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       }))
     });
 
-    // עדכון נתוני הארנק
+    // עדכון פרטי הארנק
     setWalletInfo({
       totalBudget: expectedIncome,
       spentBudget: totalExpenses,
       remainingBudget: expectedIncome - totalExpenses,
       lastTransactions: data.checklist.flatMap((category: ChecklistCategory) => 
-        category.items
-          .filter((item: ChecklistItem) => item.budget && Number(item.budget) > 0)
-          .map((item: ChecklistItem) => ({
-            itemName: item.name,
-            amount: Number(item.budget),
-            date: new Date().toISOString()
-          }))
-      ).sort((a: Transaction, b: Transaction) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5)
+        category.items.map((item: ChecklistItem) => ({
+          itemName: item.name,
+          amount: Number(item.budget) || 0,
+          date: new Date().toISOString().split('T')[0]
+        }))
+      ).slice(0, 5)
     });
-  };
-
-  const fetchWeddingPreferences = async () => {
-    try {
-      const cacheKey = `preferences-${params.id}`;
-      return await fetchWithCache(`/api/wedding-preferences/${params.id}`, cacheKey);
-    } catch (error) {
-      return null;
-    }
-  };
-
-  const fetchUserProfile = async () => {
-    try {
-      const cacheKey = `user-${params.id}`;
-      const data = await fetchWithCache(`/api/user/${params.id}`, cacheKey);
-      
-      if (!data.user) {
-        throw new Error('לא נמצא משתמש');
-      }
-
-      // חישוב הזמן שנותר עד החתונה
-      if (data.user.weddingDate) {
-        startWeddingCountdown(data.user.weddingDate);
-      }
-
-      return data;
-    } catch (err) {
-      setError('Failed to load profile');
-      return null;
-    }
   };
 
   const startWeddingCountdown = (weddingDate: string) => {
@@ -273,11 +230,11 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     return () => clearInterval(timer);
   };
 
-  // רכיב טעינה שמשתמש בLoadingSpinner
-  if (!isAuthReady || isLoading) {
+  // Loading states
+  if (!isAuthReady || loading) {
     return (
       <LoadingSpinner 
-        text="טוען את פרופיל המשתמש..." 
+        text="טוען נתוני פרופיל..."
         size="large"
         fullScreen={true}
         color="pink"
@@ -286,20 +243,20 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     );
   }
 
-  if (error) {
+  // Error handling
+  if (errors.some(error => error !== null)) {
+    const hasProfileError = errors[0]; // Profile error is most critical
+    
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
         <div className="bg-white p-8 rounded-lg shadow-md max-w-md w-full">
           <h2 className="text-red-500 text-xl font-bold mb-4">שגיאה בטעינת הנתונים</h2>
-          <p className="text-gray-700 mb-6">{error}</p>
+          <p className="text-gray-700 mb-6">
+            {hasProfileError ? 'שגיאה בטעינת פרופיל המשתמש' : 'שגיאה בטעינת נתוני החתונה'}
+          </p>
           <div className="flex justify-center">
             <button 
-              onClick={() => { 
-                setIsLoading(true);
-                setError('');
-                Promise.all([loadUserData(), fetchWeddingPreferences()])
-                  .finally(() => setIsLoading(false));
-              }}
+              onClick={() => refetchAll()}
               className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 transition-colors"
             >
               נסה שנית
@@ -387,17 +344,16 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
 
         {/* Grid עם קטעים של ניתוח תקציב והארנק */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 sm:gap-6 mb-6">
-                  {/* ניתוח תקציב */}
-        {budgetAnalysis.categories.length > 0 && (
-          <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 p-6 sm:p-8 xl:col-span-2 relative overflow-hidden">
+          {/* ניתוח תקציב */}
+          {budgetAnalysis.categories.length > 0 && (
+            <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl border border-white/50 p-6 sm:p-8 xl:col-span-2 relative overflow-hidden">
               {/* רקע דקורטיבי */}
-            <div className="absolute top-0 left-0 w-40 h-40 bg-gradient-to-br from-rose-200/30 to-transparent rounded-full"></div>
-            <div className="relative z-10">
-              <h3 className="text-xl sm:text-2xl font-bold mb-6 bg-gradient-to-r from-rose-600 to-pink-500 bg-clip-text text-transparent flex items-center gap-2">
-                📊 ניתוח תקציב
-              </h3>
-              <div className="w-full overflow-hidden">
-                <Bar
+              <div className="absolute top-0 left-0 w-40 h-40 bg-gradient-to-br from-rose-200/30 to-transparent rounded-full"></div>
+              <div className="relative z-10">
+                <h3 className="text-xl sm:text-2xl font-bold mb-6 bg-gradient-to-r from-rose-600 to-pink-500 bg-clip-text text-transparent flex items-center gap-2">
+                  📊 ניתוח תקציב
+                </h3>
+                <LazyChartComponent
                   data={{
                     labels: budgetAnalysis.categories.map(cat => cat.name),
                     datasets: [{
@@ -416,7 +372,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                         position: 'top' as const,
                         labels: {
                           font: {
-                            size: window.innerWidth < 640 ? 10 : 12
+                            size: typeof window !== 'undefined' && window.innerWidth < 640 ? 10 : 12
                           }
                         }
                       },
@@ -424,7 +380,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                         display: true,
                         text: 'התפלגות הוצאות לפי קטגוריה',
                         font: {
-                          size: window.innerWidth < 640 ? 12 : 14
+                          size: typeof window !== 'undefined' && window.innerWidth < 640 ? 12 : 14
                         }
                       }
                     },
@@ -432,24 +388,22 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                       x: {
                         ticks: {
                           font: {
-                            size: window.innerWidth < 640 ? 10 : 12
+                            size: typeof window !== 'undefined' && window.innerWidth < 640 ? 10 : 12
                           }
                         }
                       },
                       y: {
                         ticks: {
                           font: {
-                            size: window.innerWidth < 640 ? 10 : 12
+                            size: typeof window !== 'undefined' && window.innerWidth < 640 ? 10 : 12
                           }
                         }
                       }
                     }
                   }}
-                  height={window.innerWidth < 640 ? 200 : 250}
                 />
               </div>
             </div>
-          </div>
           )}
           
           {/* הארנק */}

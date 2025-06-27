@@ -4,9 +4,9 @@ import User from '../../../../models/User';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 
-// מטמון עבור נתוני משתמש
+// מטמון עבור נתוני משתמש - מוגדל מ-5 דקות ל-10 דקות
 const userCache = new Map<string, { data: UserDocument; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 דקות
+const CACHE_TTL = 10 * 60 * 1000; // 10 דקות
 
 // Define a type for the user document
 interface UserDocument {
@@ -37,19 +37,27 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    // בדיקת מטמון
+    // בדיקת מטמון משופרת
     const cachedUser = userCache.get(params.id);
     if (cachedUser && Date.now() - cachedUser.timestamp < CACHE_TTL) {
-      return NextResponse.json({ user: cachedUser.data });
+      return NextResponse.json({ user: cachedUser.data }, {
+        headers: {
+          'Cache-Control': 'private, max-age=600', // 10 דקות
+          'Last-Modified': new Date(cachedUser.timestamp).toUTCString()
+        }
+      });
     }
 
     // חיבור למסד הנתונים
     await connectToDatabase();
 
     const userId = params.id;
+    
+    // שיפור חיפוש המשתמש עם אופטימיזציות
     const user = await User.findById(userId)
-      .select('-password') // לא נביא את הסיסמה
-      .lean(); // שימוש ב-lean() לקבלת אובייקט JavaScript רגיל
+      .select('-password -__v') // לא נביא גם __v
+      .lean() // שימוש ב-lean() לקבלת אובייקט JavaScript רגיל
+      .exec(); // שימוש ב-exec() לביצועים טובים יותר
 
     if (!user) {
       return NextResponse.json(
@@ -58,13 +66,27 @@ export async function GET(
       );
     }
 
-    // שמירה במטמון
+    // שמירה במטמון עם TTL
     userCache.set(params.id, {
       data: user as unknown as UserDocument,
       timestamp: Date.now()
     });
 
-    return NextResponse.json({ user });
+    // ניקוי אוטומטי של מטמון ישן
+    setTimeout(() => {
+      const entry = userCache.get(params.id);
+      if (entry && Date.now() - entry.timestamp >= CACHE_TTL) {
+        userCache.delete(params.id);
+      }
+    }, CACHE_TTL);
+
+    return NextResponse.json({ user }, {
+      headers: {
+        'Cache-Control': 'private, max-age=600',
+        'Last-Modified': new Date().toUTCString(),
+        'ETag': `"${user._id}-${user.updatedAt?.getTime() || Date.now()}"`
+      }
+    });
   } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json(
@@ -82,6 +104,9 @@ export async function PUT(
     await connectToDatabase();
     const userId = params.id;
     const userData = await request.json();
+
+    // נקה מטמון בעת עדכון
+    userCache.delete(params.id);
 
     // Find the user
     const user = await User.findById(userId);
@@ -115,12 +140,18 @@ export async function PUT(
         });
         
         await connectedUser.save();
+        // נקה גם את המטמון של המשתמש המחובר
+        userCache.delete(user.connectedUserId.toString());
       }
     }
 
     return NextResponse.json({ 
       message: 'User updated successfully',
       user
+    }, {
+      headers: {
+        'Cache-Control': 'no-cache' // לא לשמור במטמון אחרי עדכון
+      }
     });
   } catch (error) {
     console.error('Error updating user:', error);
