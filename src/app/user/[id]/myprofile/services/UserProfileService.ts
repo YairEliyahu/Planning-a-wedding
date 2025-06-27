@@ -1,4 +1,4 @@
-import { UserProfile, WalletInfo, BudgetAnalysis, ChecklistCategory } from '../types/profileTypes';
+import { UserProfile, WalletInfo, BudgetAnalysis, ChecklistCategory, ChecklistItem } from '../types/profileTypes';
 
 class UserProfileService {
   private baseUrl = '/api';
@@ -35,7 +35,7 @@ class UserProfileService {
     return response.json();
   }
 
-  async fetchWeddingPreferences(userId: string): Promise<any> {
+  async fetchWeddingPreferences(userId: string): Promise<Record<string, unknown>> {
     const response = await fetch(`${this.baseUrl}/wedding-preferences/${userId}`, {
       method: 'GET',
       headers: {
@@ -72,7 +72,7 @@ class UserProfileService {
   calculateWalletInfo(checklist: ChecklistCategory[], _userProfile: UserProfile): WalletInfo {
     // חישוב סך כל ההוצאות מהצ'ק ליסט
     const totalExpenses = checklist.reduce((total: number, category: ChecklistCategory) => {
-      return total + category.items.reduce((sum: number, item: any) => {
+      return total + category.items.reduce((sum: number, item: ChecklistItem) => {
         return sum + (Number(item.budget) || 0);
       }, 0);
     }, 0);
@@ -88,7 +88,7 @@ class UserProfileService {
       spentBudget: totalExpenses,
       remainingBudget: expectedIncome - totalExpenses,
       lastTransactions: checklist.flatMap((category: ChecklistCategory) => 
-        category.items.map((item: any) => ({
+        category.items.map((item: ChecklistItem) => ({
           itemName: item.name,
           amount: Number(item.budget) || 0,
           date: new Date().toISOString().split('T')[0]
@@ -101,7 +101,7 @@ class UserProfileService {
   calculateBudgetAnalysis(checklist: ChecklistCategory[]): BudgetAnalysis {
     // חישוב סך כל ההוצאות מהצ'ק ליסט
     const totalExpenses = checklist.reduce((total: number, category: ChecklistCategory) => {
-      return total + category.items.reduce((sum: number, item: any) => {
+      return total + category.items.reduce((sum: number, item: ChecklistItem) => {
         return sum + (Number(item.budget) || 0);
       }, 0);
     }, 0);
@@ -117,7 +117,7 @@ class UserProfileService {
       estimatedExpenses: totalExpenses,
       categories: checklist.map((category: ChecklistCategory) => ({
         name: category.name,
-        amount: category.items.reduce((sum: number, item: any) => sum + (Number(item.budget) || 0), 0)
+        amount: category.items.reduce((sum: number, item: ChecklistItem) => sum + (Number(item.budget) || 0), 0)
       }))
     };
   }
