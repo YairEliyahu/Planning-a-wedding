@@ -1,0 +1,53 @@
+{
+  "name": "guestlist-tests",
+  "version": "1.0.0",
+  "description": "Test suite for wedding guestlist feature",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:simple": "jest simple-test.js"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.1.4",
+    "@testing-library/react": "^14.1.2",
+    "@testing-library/user-event": "^14.5.1",
+    "@types/jest": "^29.5.8",
+    "jest": "^29.7.0",
+    "jest-environment-jsdom": "^29.7.0",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "^5.8.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "jsdom",
+    "setupFilesAfterEnv": ["<rootDir>/setup.ts"],
+    "moduleNameMapping": {
+      "^@/(.*)$": "<rootDir>/../../../../$1"
+    },
+    "transform": {
+      "^.+\\.(ts|tsx)$": "ts-jest",
+      "^.+\\.(js|jsx)$": "babel-jest"
+    },
+    "testMatch": [
+      "**/__tests__/**/*.(ts|tsx|js|jsx)",
+      "**/*.(test|spec).(ts|tsx|js|jsx)"
+    ],
+    "collectCoverageFrom": [
+      "**/*.{ts,tsx}",
+      "!**/*.d.ts",
+      "!**/node_modules/**"
+    ],
+    "globals": {
+      "ts-jest": {
+        "useESM": true
+      }
+    }
+  }
+} 
