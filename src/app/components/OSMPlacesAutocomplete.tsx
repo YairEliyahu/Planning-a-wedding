@@ -125,16 +125,25 @@ const OSMPlacesAutocomplete = ({
       {showSuggestions && suggestions.length > 0 && (
         <ul className="absolute z-10 w-full mt-1 bg-white shadow-lg max-h-60 rounded-md py-1 overflow-auto border border-gray-300 text-right">
           {suggestions.map((place) => (
-            <li
+            <button
+              type="button"
               key={place.place_id}
-              className="px-4 py-2 hover:bg-pink-50 cursor-pointer"
+              className="w-full text-right px-4 py-2 hover:bg-pink-50 cursor-pointer focus:outline-none"
               onClick={() => handleSelectPlace(place)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleSelectPlace(place);
+                }
+              }}
+              tabIndex={0}
+              style={{ background: 'none', border: 'none' }}
             >
               <div className="text-sm">{place.display_name}</div>
               <div className="text-xs text-gray-500">
                 {place.type} - {place.class}
               </div>
-            </li>
+            </button> 
           ))}
         </ul>
       )}

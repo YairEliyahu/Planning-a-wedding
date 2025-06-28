@@ -1,4 +1,3 @@
-/// <reference types="@testing-library/jest-dom" />
 /* eslint-disable @typescript-eslint/no-explicit-any */
 // @ts-nocheck
 import '@testing-library/jest-dom';
