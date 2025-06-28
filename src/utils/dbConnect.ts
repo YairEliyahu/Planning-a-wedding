@@ -24,9 +24,22 @@ if (!cached) {
 }
 
 async function connectToDatabase() {
-  // אם כבר יש חיבור פעיל, החזר אותו מיד
-  if (cached && cached.conn) {
+  // בדיקה משופרת לחיבור קיים - בודק גם את מצב הקריאה
+  if (cached && cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
+  }
+
+  // אם יש חיבור אבל הוא לא מוכן, נחכה לו
+  if (cached && cached.promise) {
+    try {
+      cached.conn = await cached.promise;
+      if (mongoose.connection.readyState === 1) {
+        return cached.conn;
+      }
+    } catch (error) {
+      // אם נכשל, נאפס את ההבטחה ונתחיל מחדש
+      cached.promise = null;
+    }
   }
 
   // אם אין הבטחה פעילה ליצירת חיבור, צור אחת
@@ -34,22 +47,20 @@ async function connectToDatabase() {
     const opts = {
       bufferCommands: false,
       dbName: 'WeddingApp',
-      // אופטימיזציה של הגדרות ביצועים
-      connectTimeoutMS: 5000, // קיצור זמן חיבור ל-5 שניות
-      maxPoolSize: 20, // הגדלת גודל פול החיבורים
-      minPoolSize: 5,  
-      serverSelectionTimeoutMS: 3000, // קיצור זמן בחירת שרת
-      socketTimeoutMS: 20000, // קיצור זמן timeout
-      maxIdleTimeMS: 30000, // סגירת חיבורים לא פעילים אחרי 30 שניות
-      // אופטימיזציות נוספות לביצועים
+      // אופטימיזציה של הגדרות ביצועים - הסרת אופציות לא נתמכות
+      connectTimeoutMS: 10000, // חזרה לערך בטוח יותר
+      maxPoolSize: 10,
+      minPoolSize: 2,  
+      serverSelectionTimeoutMS: 5000, // חזרה לערך בטוח יותר
+      socketTimeoutMS: 20000,
+      maxIdleTimeMS: 30000,
+      // אופטימיזציות בסיסיות שנתמכות
       retryWrites: true,
-      w: 'majority',
-      readPreference: 'primaryPreferred' as const, // קריאה מהראשי בעדיפות
-      compressors: ['zlib' as const], // דחיסת נתונים
-      zlibCompressionLevel: 6 as const,
-      // הגדרות heartbeat מותאמות
-      heartbeatFrequencyMS: 10000,
-      
+      w: 'majority' as const,
+      readPreference: 'primary' as const, // שינוי ל-primary בלבד
+      // הסרת compressors שעלולים לגרום לבעיות
+      // הגדרות heartbeat בסיסיות
+      heartbeatFrequencyMS: 10000
     };
 
     console.time('mongodb-connect');
@@ -57,7 +68,7 @@ async function connectToDatabase() {
       console.timeEnd('mongodb-connect');
       console.log('Connected to MongoDB successfully');
       
-      // הגדרת אופטימיזציות נוספות
+      // הגדרת אופטימיזציות בסיסיות
       mongoose.set('strictQuery', false);
       mongoose.set('runValidators', true);
       
@@ -75,6 +86,7 @@ async function connectToDatabase() {
     if (cached) {
       cached.promise = null;
     }
+    console.error('MongoDB connection failed:', e);
     throw e;
   }
 }
@@ -86,10 +98,20 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', (err) => {
   console.error('MongoDB connection error:', err);
+  // איפוס הקאש במקרה של שגיאה
+  if (cached) {
+    cached.conn = null;
+    cached.promise = null;
+  }
 });
 
 mongoose.connection.on('disconnected', () => {
   console.log('MongoDB connection disconnected');
+  // איפוס הקאש במקרה של ניתוק
+  if (cached) {
+    cached.conn = null;
+    cached.promise = null;
+  }
 });
 
 // הוספת מאזינים לאירועים נוספים לצורך דיבוג
