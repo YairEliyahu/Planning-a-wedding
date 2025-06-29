@@ -1,5 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import LoadingSpinner from './LoadingSpinner';
+// ייבוא Chart.js setup מרכזי
+import '@/lib/chartSetup';
 
 // Lazy load Chart.js components only when needed
 const Bar = lazy(() => import('react-chartjs-2').then(module => ({ default: module.Bar })));

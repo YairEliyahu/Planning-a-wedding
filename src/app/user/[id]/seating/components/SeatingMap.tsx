@@ -3,6 +3,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { useSeating } from '../context/SeatingContext';
+import { MapPosition } from '../types';
 
 export default function SeatingMap() {
   const {
@@ -12,9 +13,18 @@ export default function SeatingMap() {
     boardDimensions,
     selectedTable,
     setSelectedTable,
+    setShowTableDetailModal,
     setZoomLevel,
     setMapPosition,
     assignGuestToTable,
+    setTables,
+    isDragging,
+    isTableDragging,
+    draggedTable,
+    setIsDragging,
+    setIsTableDragging,
+    setDraggedTable,
+    removeGuestFromTable,
   } = useSeating();
 
   const zoomIn = () => {
@@ -28,6 +38,67 @@ export default function SeatingMap() {
   const resetZoom = () => {
     setZoomLevel(1);
     setMapPosition({ x: 0, y: 0 });
+  };
+
+  // Mouse position tracking for drag
+  const [mousePosition, setMousePosition] = React.useState({ x: 0, y: 0 });
+
+  // Handle table drag start
+  const handleTableDragStart = (e: React.MouseEvent, table: any) => {
+    e.stopPropagation();
+    setIsTableDragging(true);
+    setDraggedTable(table);
+    setMousePosition({ x: e.clientX, y: e.clientY });
+  };
+
+  // Handle table drag
+  const handleTableDrag = (e: React.MouseEvent) => {
+    if (!isTableDragging || !draggedTable) return;
+    
+    const deltaX = (e.clientX - mousePosition.x) / zoomLevel;
+    const deltaY = (e.clientY - mousePosition.y) / zoomLevel;
+    
+    const updatedTables = tables.map(table => 
+      table.id === draggedTable.id 
+        ? { ...table, x: Math.max(0, table.x + deltaX), y: Math.max(0, table.y + deltaY) }
+        : table
+    );
+    
+    setTables(updatedTables);
+    setMousePosition({ x: e.clientX, y: e.clientY });
+  };
+
+  // Handle table drag end
+  const handleTableDragEnd = () => {
+    setIsTableDragging(false);
+    setDraggedTable(null);
+  };
+
+  // Handle map drag start
+  const handleMapDragStart = (e: React.MouseEvent) => {
+    if (isTableDragging) return;
+    setIsDragging(true);
+    setMousePosition({ x: e.clientX, y: e.clientY });
+  };
+
+  // Handle map drag
+  const handleMapDrag = (e: React.MouseEvent) => {
+    if (!isDragging || isTableDragging) return;
+    
+    const deltaX = e.clientX - mousePosition.x;
+    const deltaY = e.clientY - mousePosition.y;
+    
+    const newPosition: MapPosition = {
+      x: mapPosition.x + deltaX,
+      y: mapPosition.y + deltaY
+    };
+    setMapPosition(newPosition);
+    setMousePosition({ x: e.clientX, y: e.clientY });
+  };
+
+  // Handle map drag end
+  const handleMapDragEnd = () => {
+    setIsDragging(false);
   };
 
   return (
@@ -71,15 +142,28 @@ export default function SeatingMap() {
         </div>
       </div>
       
-      <div 
-        className="relative bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 overflow-hidden w-full select-none"
-        style={{ 
-          height: '75vh',
-          minHeight: '400px',
-          maxHeight: '80vh'
+              <div 
+          className={`relative bg-gray-50 rounded-lg border-2 border-dashed border-gray-300 overflow-hidden w-full select-none ${
+            isDragging ? 'cursor-move' : 'cursor-default'
+          }`}
+          style={{ 
+            height: '75vh',
+            minHeight: '400px',
+            maxHeight: '80vh'
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="מפת סידורי הושבה - גרור להזיז את המפה"
+        onMouseDown={handleMapDragStart}
+        onMouseMove={isTableDragging ? handleTableDrag : handleMapDrag}
+        onMouseUp={() => {
+          handleMapDragEnd();
+          handleTableDragEnd();
         }}
-        role="application"
-        aria-label="מפת סידורי הושבה"
+        onMouseLeave={() => {
+          handleMapDragEnd();
+          handleTableDragEnd();
+        }}
       >
         <div 
           className="relative transition-transform duration-75 ease-out origin-top-left"
@@ -95,15 +179,29 @@ export default function SeatingMap() {
               key={table.id}
               className={`absolute ${
                 selectedTable?.id === table.id ? 'ring-4 ring-blue-300' : ''
-              }`}
-              onClick={() => setSelectedTable(table)}
+              } ${isTableDragging && draggedTable?.id === table.id ? 'ring-4 ring-purple-400' : ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!isTableDragging) {
+                  setSelectedTable(table);
+                  setShowTableDetailModal(true);
+                }
+              }}
+              onMouseDown={(e) => {
+                // Only allow table dragging if not during a guest drop operation
+                if (e.button === 0 && !e.ctrlKey) { // Left click only, no Ctrl
+                  e.stopPropagation();
+                  handleTableDragStart(e, table);
+                }
+              }}
               style={{
                 left: table.x,
                 top: table.y,
                 width: table.shape === 'round' ? '120px' : '140px',
                 height: table.shape === 'round' ? '120px' : '100px',
-                cursor: 'pointer',
-                zIndex: 10,
+                cursor: isTableDragging && draggedTable?.id === table.id ? 'grabbing' : 'grab',
+                zIndex: isTableDragging && draggedTable?.id === table.id ? 20 : 10,
+                userSelect: 'none',
               }}
             >
               <div 
@@ -114,13 +212,21 @@ export default function SeatingMap() {
                 }`}
                 onDrop={(e: React.DragEvent) => {
                   e.preventDefault();
+                  e.stopPropagation();
                   const guestData = e.dataTransfer.getData('application/json');
                   if (guestData) {
-                    const guest = JSON.parse(guestData);
-                    assignGuestToTable(guest, table);
+                    try {
+                      const guest = JSON.parse(guestData);
+                      assignGuestToTable(guest, table);
+                    } catch (error) {
+                      console.error('Error parsing guest data:', error);
+                    }
                   }
                 }}
-                onDragOver={(e: React.DragEvent) => e.preventDefault()}
+                onDragOver={(e: React.DragEvent) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }}
               >
                 <div className="text-center">
                   <div className="font-bold text-sm font-[var(--font-heebo)]">
@@ -141,14 +247,41 @@ export default function SeatingMap() {
                   return (
                     <div
                       key={guest._id}
-                      className="absolute w-6 h-6 rounded-full flex items-center justify-center text-xs bg-blue-500 text-white"
+                      className="absolute group"
                       style={{
                         left: `calc(50% + ${x}px - 12px)`,
                         top: `calc(50% + ${y}px - 12px)`,
                       }}
-                      title={guest.name}
                     >
-                      👤
+                      {/* Guest Avatar */}
+                      <div
+                        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all duration-200 ${
+                          guest.isCompanion 
+                            ? 'bg-purple-500 text-white border border-purple-600' 
+                            : guest.isConfirmed === true 
+                              ? 'bg-green-500 text-white border border-green-600'
+                              : guest.isConfirmed === null
+                                ? 'bg-yellow-500 text-white border border-yellow-600'
+                                : 'bg-red-500 text-white border border-red-600'
+                        }`}
+                        title={`${guest.name}${guest.isCompanion ? ' (מלווה)' : ''}`}
+                      >
+                        {guest.isCompanion ? '👥' : '👤'}
+                      </div>
+                      
+                      {/* Remove Button - Shows on Hover */}
+                      {!guest.isCompanion && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeGuestFromTable(guest);
+                          }}
+                          className="absolute -top-2 -right-2 w-4 h-4 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-600 flex items-center justify-center"
+                          title={`הסר את ${guest.name} מהשולחן`}
+                        >
+                          ×
+                        </button>
+                      )}
                     </div>
                   );
                 })}

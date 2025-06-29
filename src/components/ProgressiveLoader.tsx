@@ -46,7 +46,7 @@ const ProgressiveLoader: React.FC<ProgressiveLoaderProps> = ({
         
         {/* רשימת שלבים */}
         <div className="space-y-3">
-          {stages.map((stage, index) => (
+          {stages.map((stage, _index) => (
             <div key={stage.id} className="flex items-center gap-3">
               {stage.completed ? (
                 <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
@@ -80,6 +80,21 @@ const ProgressiveLoader: React.FC<ProgressiveLoaderProps> = ({
                 width: `${(stages.filter(s => s.completed).length / stages.length) * 100}%`
               }}
             />
+          </div>
+          <div className="flex justify-between text-xs text-gray-500 mt-2">
+            <span>התחלה</span>
+            <span>{stages.filter(s => s.completed).length}/{stages.length}</span>
+            <span>סיום</span>
+          </div>
+        </div>
+
+        {/* New Progress Bar */}
+        <div className="mt-6">
+          <div className="bg-gray-200 rounded-full h-2 overflow-hidden">
+            {Array.from({ length: (stages.filter(s => s.completed).length / stages.length) * 100 }).map((_, _index) => (
+              <div key={_index} className="w-2 h-8 bg-gradient-to-t from-pink-500 to-purple-600 rounded-full animate-bounce" 
+                   style={{ animationDelay: `${_index * 0.1}s` }} />
+            ))}
           </div>
           <div className="flex justify-between text-xs text-gray-500 mt-2">
             <span>התחלה</span>

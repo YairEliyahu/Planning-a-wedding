@@ -1,0 +1,1 @@
+(_file: File, _onProgress?: (current: number, total: number, currentName: string) => void) => Promise<{ success: number; error: number; errorDetails?: any }>; 

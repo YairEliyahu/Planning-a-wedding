@@ -2,6 +2,7 @@
 
 import { useGuests } from '../context/GuestContext';
 import { guestService } from '../services/guestService';
+import toast from 'react-hot-toast';
 
 interface GuestFiltersProps {
   onAddGuest: () => void;
@@ -19,41 +20,66 @@ export function GuestFilters({ onAddGuest, onImport }: GuestFiltersProps) {
   } = useGuests();
 
   const handleDeleteAll = async () => {
-    if (!confirm('אזהרה: פעולה זו תמחק את כל האורחים ברשימה! האם אתה בטוח שברצונך להמשיך?')) {
+    // First confirmation
+    const firstConfirm = window.confirm('⚠️ אזהרה: פעולה זו תמחק את כל האורחים ברשימה!\n\nפעולה זו אינה הפיכה.\n\nהאם אתה בטוח שברצונך להמשיך?');
+    if (!firstConfirm) {
       return;
     }
     
-    if (!confirm('אישור סופי: כל האורחים יימחקו ולא ניתן יהיה לשחזר אותם. האם להמשיך?')) {
+    // Second confirmation with different message
+    const secondConfirm = window.confirm('🚨 אישור סופי:\n\nכל האורחים יימחקו לצמיתות!\nלא ניתן יהיה לשחזר אותם.\n\nהקלד "מחק" כדי לאשר:');
+    if (!secondConfirm) {
       return;
     }
+    
+    // Show loading toast
+    const loadingToast = toast.loading('מוחק את כל האורחים...');
     
     try {
       const result = await deleteAllGuests();
-      alert(`כל האורחים נמחקו בהצלחה (${result.deletedCount} אורחים)`);
+      toast.dismiss(loadingToast);
+      toast.success(`✅ כל האורחים נמחקו בהצלחה!\n${result.deletedCount} אורחים נמחקו`, {
+        duration: 5000,
+      });
     } catch (error) {
-      alert('שגיאה במחיקת כל האורחים. אנא נסה שוב.');
+      toast.dismiss(loadingToast);
+      toast.error('❌ שגיאה במחיקת כל האורחים. אנא נסה שוב.');
+      console.error('Error deleting all guests:', error);
     }
   };
 
   const handleCleanupDuplicates = async () => {
-    if (!confirm('פעולה זו תסיר כפילויות מרשימת האורחים. האם להמשיך?')) {
+    const confirm = window.confirm('פעולה זו תסיר כפילויות מרשימת האורחים.\n\nהאם להמשיך?');
+    if (!confirm) {
       return;
     }
     
+    const loadingToast = toast.loading('מנקה כפילויות...');
+    
     try {
       const result = await cleanupDuplicates();
-      alert(`ניקוי הושלם: ${result.removedCount} כפילויות הוסרו`);
+      toast.dismiss(loadingToast);
+      toast.success(`🧹 ניקוי הושלם!\n${result.removedCount} כפילויות הוסרו`, {
+        duration: 4000,
+      });
     } catch (error) {
-      alert('שגיאה בניקוי כפילויות');
+      toast.dismiss(loadingToast);
+      toast.error('❌ שגיאה בניקוי כפילויות');
+      console.error('Error cleaning duplicates:', error);
     }
   };
 
   const handleForceRefresh = async () => {
+    const loadingToast = toast.loading('מרענן רשימת אורחים...');
+    
     try {
       await forceRefresh();
-      alert('רשימת האורחים סונכרנה בהצלחה');
+      toast.dismiss(loadingToast);
+      toast.success('🔄 רשימת האורחים סונכרנה בהצלחה');
     } catch (error) {
-      alert('שגיאה ברענון רשימת האורחים');
+      toast.dismiss(loadingToast);
+      toast.error('❌ שגיאה ברענון רשימת האורחים');
+      console.error('Error refreshing guests:', error);
     }
   };
 

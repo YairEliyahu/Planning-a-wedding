@@ -25,11 +25,11 @@ export async function GET(
 
     // החזר את העדפות החתונה בפורמט הנדרש
     const response = {
-      venueType: preferences?.venueType || '',
-      timeOfDay: preferences?.timeOfDay || '',
-      locationPreference: preferences?.location || '',
-      guestsCount: user.expectedGuests || '',
-      estimatedBudget: user.budget || ''
+      venueType: (preferences as any)?.venueType || '',
+      timeOfDay: (preferences as any)?.timeOfDay || '',
+      locationPreference: (preferences as any)?.location || '',
+      guestsCount: (user as any).expectedGuests || '',
+      estimatedBudget: (user as any).budget || ''
     };
 
     return NextResponse.json({ success: true, preferences: response }, {

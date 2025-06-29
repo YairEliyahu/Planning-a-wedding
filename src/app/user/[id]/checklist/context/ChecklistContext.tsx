@@ -24,7 +24,13 @@ export function ChecklistProvider({ children, userId }: ChecklistProviderProps) 
   
   // React Query hooks
   const { data: categories = [], isLoading, error: queryError } = useChecklist(userId, !!userId);
-  const updateChecklistMutation = useUpdateChecklist(userId);
+  
+  const handleSaveSuccess = () => {
+    setShowSaveSuccess(true);
+    setTimeout(() => setShowSaveSuccess(false), 2000);
+  };
+  
+  const updateChecklistMutation = useUpdateChecklist(userId, handleSaveSuccess);
   const resetChecklistMutation = useResetChecklist(userId);
   const { clearUser, invalidateUser } = useClearCache();
 
@@ -38,6 +44,7 @@ export function ChecklistProvider({ children, userId }: ChecklistProviderProps) 
   const [newItemName, setNewItemName] = useState('');
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [error, setError] = useState('');
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 
   // מחושבים מהנתונים
   const summary = useMemo(() => ChecklistService.calculateSummary(categories), [categories]);
@@ -208,7 +215,9 @@ export function ChecklistProvider({ children, userId }: ChecklistProviderProps) 
     chartData,
     
     // UI State
-    isLoading: isLoading || updateChecklistMutation.isPending || resetChecklistMutation.isPending,
+    isLoading: isLoading, // רק טעינה ראשונית
+    isSaving: updateChecklistMutation.isPending || resetChecklistMutation.isPending, // שמירה ברקע
+    showSaveSuccess, // הודעת הצלחה עדינה
     error,
     isAddingItem,
     selectedCategory,

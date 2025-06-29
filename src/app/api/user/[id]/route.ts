@@ -84,7 +84,7 @@ export async function GET(
       headers: {
         'Cache-Control': 'private, max-age=600',
         'Last-Modified': new Date().toUTCString(),
-        'ETag': `"${user._id}-${user.updatedAt?.getTime() || Date.now()}"`
+        'ETag': `"${(user as any)._id}-${(user as any).updatedAt?.getTime() || Date.now()}"`
       }
     });
   } catch (error) {

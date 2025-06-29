@@ -1,8 +1,10 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { ChecklistItem as ChecklistItemType } from '../types';
 import { useChecklistContext } from '../context/ChecklistContext';
 import { getPriorityClass, getPriorityLabel, validateNumericInput } from '../utils/checklistUtils';
+import { useDebounce } from '../hooks/useDebounce';
 
 interface ChecklistItemProps {
   item: ChecklistItemType;
@@ -16,6 +18,37 @@ export default function ChecklistItem({ item }: ChecklistItemProps) {
     updateAverageGift, 
     updateCostPerPerson 
   } = useChecklistContext();
+
+  // Local state לשמירת השינויים עד שהמשתמש יצא מהשדה
+  const [localBudget, setLocalBudget] = useState(item.budget);
+  const [localGuestCount, setLocalGuestCount] = useState(item.guestCount === 0 ? '' : item.guestCount?.toString() || '');
+  const [localAverageGift, setLocalAverageGift] = useState(item.averageGift === 0 ? '' : item.averageGift?.toString() || '');
+  const [localCostPerPerson, setLocalCostPerPerson] = useState(item.costPerPerson === 0 ? '' : item.costPerPerson?.toString() || '');
+
+  // עדכון local state כשהפריט משתנה מבחוץ
+  useEffect(() => {
+    setLocalBudget(item.budget);
+    setLocalGuestCount(item.guestCount === 0 ? '' : item.guestCount?.toString() || '');
+    setLocalAverageGift(item.averageGift === 0 ? '' : item.averageGift?.toString() || '');
+    setLocalCostPerPerson(item.costPerPerson === 0 ? '' : item.costPerPerson?.toString() || '');
+  }, [item.budget, item.guestCount, item.averageGift, item.costPerPerson]);
+
+  // יצירת debounced functions לשמירה אוטומטית ברקע (אחרי 800ms ללא הקלדה)
+  const debouncedUpdateBudget = useDebounce((itemId: string, value: string) => {
+    updateBudget(itemId, value);
+  }, 800);
+
+  const debouncedUpdateGuestCount = useDebounce((itemId: string, value: string) => {
+    updateGuestCount(itemId, value);
+  }, 800);
+
+  const debouncedUpdateAverageGift = useDebounce((itemId: string, value: string) => {
+    updateAverageGift(itemId, value);
+  }, 800);
+
+  const debouncedUpdateCostPerPerson = useDebounce((itemId: string, value: string) => {
+    updateCostPerPerson(itemId, value);
+  }, 800);
 
   const isVenueItem = item.id === '1';
 
@@ -77,8 +110,13 @@ export default function ChecklistItem({ item }: ChecklistItemProps) {
             <div className="flex items-center space-x-2 rtl:space-x-reverse">
               <input
                 type="number"
-                value={item.guestCount === 0 ? '' : item.guestCount}
-                onChange={(e) => updateGuestCount(item.id, e.target.value)}
+                value={localGuestCount}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setLocalGuestCount(newValue);
+                  debouncedUpdateGuestCount(item.id, newValue);
+                }}
+                onBlur={() => updateGuestCount(item.id, localGuestCount)}
                 placeholder="כמות אורחים"
                 className="w-32 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 min="0"
@@ -90,11 +128,13 @@ export default function ChecklistItem({ item }: ChecklistItemProps) {
                 type="text"
                 inputMode="numeric"
                 pattern="[0-9]*"
-                value={item.costPerPerson === 0 ? '' : item.costPerPerson}
+                value={localCostPerPerson}
                 onChange={(e) => {
                   const value = validateNumericInput(e.target.value);
-                  updateCostPerPerson(item.id, value);
+                  setLocalCostPerPerson(value);
+                  debouncedUpdateCostPerPerson(item.id, value);
                 }}
+                onBlur={() => updateCostPerPerson(item.id, localCostPerPerson)}
                 placeholder="מחיר למנה"
                 className="w-32 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -103,8 +143,13 @@ export default function ChecklistItem({ item }: ChecklistItemProps) {
             <div className="flex items-center space-x-2 rtl:space-x-reverse">
               <input
                 type="number"
-                value={item.averageGift === 0 ? '' : item.averageGift}
-                onChange={(e) => updateAverageGift(item.id, e.target.value)}
+                value={localAverageGift}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setLocalAverageGift(newValue);
+                  debouncedUpdateAverageGift(item.id, newValue);
+                }}
+                onBlur={() => updateAverageGift(item.id, localAverageGift)}
                 placeholder="ממוצע למעטפה"
                 className="w-32 p-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 min="0"
@@ -117,8 +162,13 @@ export default function ChecklistItem({ item }: ChecklistItemProps) {
           <div className="relative">
             <input
               type="number"
-              value={item.budget}
-              onChange={(e) => updateBudget(item.id, e.target.value)}
+                value={localBudget}
+                onChange={(e) => {
+                  const newValue = e.target.value;
+                  setLocalBudget(newValue);
+                  debouncedUpdateBudget(item.id, newValue);
+                }}
+                onBlur={() => updateBudget(item.id, localBudget)}
               placeholder="תקציב"
               className="w-32 p-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               min="0"

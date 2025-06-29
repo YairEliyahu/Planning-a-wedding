@@ -20,7 +20,7 @@ export const useChecklist = (userId: string, enabled: boolean = true) => {
 };
 
 // Hook לשמירת הצ'קליסט
-export const useUpdateChecklist = (userId: string) => {
+export const useUpdateChecklist = (userId: string, onSuccess?: () => void) => {
   const queryClient = useQueryClient();
 
   return useMutation({
@@ -38,6 +38,10 @@ export const useUpdateChecklist = (userId: string) => {
 
       // החזרת קונטקסט לשחזור
       return { previousCategories };
+    },
+    onSuccess: () => {
+      // הצגת הודעת הצלחה עדינה
+      onSuccess?.();
     },
     onError: (err, newCategories, context) => {
       // שחזור הנתונים הקודמים במקרה של שגיאה

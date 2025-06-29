@@ -325,6 +325,19 @@ export async function POST(req: NextRequest) {
       
       await existingGuest.save();
       
+      // Clear cache for this user and any connected accounts
+      const cacheKeysToDelete = [];
+      for (const [key] of guestsCache.entries()) {
+        if (key.includes(userId) || (user.sharedEventId && key.includes(user.sharedEventId))) {
+          cacheKeysToDelete.push(key);
+        }
+      }
+      
+      cacheKeysToDelete.forEach(key => {
+        console.log(`[GUEST API] Clearing cache key: ${key}`);
+        guestsCache.delete(key);
+      });
+
       return NextResponse.json({
         success: true,
         guest: existingGuest,
@@ -362,6 +375,19 @@ export async function POST(req: NextRequest) {
     
     const guest = await Guest.create(guestData);
     console.log(`[GUEST API] Created new guest with ID ${guest._id}`);
+
+    // Clear cache for this user and any connected accounts
+    const cacheKeysToDelete = [];
+    for (const [key] of guestsCache.entries()) {
+      if (key.includes(userId) || (user.sharedEventId && key.includes(user.sharedEventId))) {
+        cacheKeysToDelete.push(key);
+      }
+    }
+    
+    cacheKeysToDelete.forEach(key => {
+      console.log(`[GUEST API] Clearing cache key: ${key}`);
+      guestsCache.delete(key);
+    });
 
     // אם יש חשבונות מחוברים - לא ליצור עותקים! 
     // האורח כבר נגיש לשני החשבונות באמצעות sharedEventId

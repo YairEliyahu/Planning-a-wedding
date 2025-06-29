@@ -18,6 +18,7 @@ if (!MONGODB_URI) {
 }
 
 let cached = global.mongoose;
+let listenersSet = false; // דגל למניעת הוספת listeners מרובים
 
 if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
@@ -72,6 +73,13 @@ async function connectToDatabase() {
       mongoose.set('strictQuery', false);
       mongoose.set('runValidators', true);
       
+      // הגדר את מספר המאזינים המקסימלי לפני הוספת listeners
+      if (!listenersSet) {
+        mongoose.connection.setMaxListeners(20);
+        setupConnectionListeners();
+        listenersSet = true;
+      }
+      
       return mongooseInstance;
     });
   }
@@ -91,42 +99,43 @@ async function connectToDatabase() {
   }
 }
 
-// אופטימיזציה של אירועי החיבור עם יותר מידע לדיבוג
-mongoose.connection.on('connected', () => {
-  console.log(`MongoDB connected to ${mongoose.connection.host}:${mongoose.connection.port}/${mongoose.connection.db?.databaseName || ''}`);
-});
+// פונקציה נפרדת להגדרת listeners (רק פעם אחת)
+function setupConnectionListeners() {
+  mongoose.connection.on('connected', () => {
+    console.log(`MongoDB connected to ${mongoose.connection.host}:${mongoose.connection.port}/${mongoose.connection.db?.databaseName || ''}`);
+  });
 
-mongoose.connection.on('error', (err) => {
-  console.error('MongoDB connection error:', err);
-  // איפוס הקאש במקרה של שגיאה
-  if (cached) {
-    cached.conn = null;
-    cached.promise = null;
-  }
-});
+  mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
+    // איפוס הקאש במקרה של שגיאה
+    if (cached) {
+      cached.conn = null;
+      cached.promise = null;
+    }
+  });
 
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB connection disconnected');
-  // איפוס הקאש במקרה של ניתוק
-  if (cached) {
-    cached.conn = null;
-    cached.promise = null;
-  }
-});
+  mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB connection disconnected');
+    // איפוס הקאש במקרה של ניתוק
+    if (cached) {
+      cached.conn = null;
+      cached.promise = null;
+    }
+  });
 
-// הוספת מאזינים לאירועים נוספים לצורך דיבוג
-mongoose.connection.on('reconnected', () => {
-  console.log('MongoDB reconnected');
-});
+  mongoose.connection.on('reconnected', () => {
+    console.log('MongoDB reconnected');
+  });
 
-mongoose.connection.on('timeout', () => {
-  console.log('MongoDB connection timeout');
-});
+  mongoose.connection.on('timeout', () => {
+    console.log('MongoDB connection timeout');
+  });
 
-// ניטור ביצועים
-mongoose.connection.on('slow', () => {
-  console.warn('MongoDB slow operation detected');
-});
+  // ניטור ביצועים
+  mongoose.connection.on('slow', () => {
+    console.warn('MongoDB slow operation detected');
+  });
+}
 
 export default connectToDatabase;
 

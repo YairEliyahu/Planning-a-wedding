@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useGuests, Guest } from '../context/GuestContext';
+import toast from 'react-hot-toast';
 
 interface GuestTableProps {
   onAddGuest: () => void;
@@ -13,7 +14,7 @@ export function GuestTable({ onAddGuest }: GuestTableProps) {
     updateGuest, 
     deleteGuest, 
     confirmGuest,
-    isLoading 
+    isLoading
   } = useGuests();
   
   const [editingGuestId, setEditingGuestId] = useState<string | null>(null);
@@ -36,33 +37,40 @@ export function GuestTable({ onAddGuest }: GuestTableProps) {
         // Save changes
         await updateGuest(guest);
         setEditingGuestId(null);
+        toast.success(`✅ ${guest.name} עודכן בהצלחה`);
       } else {
         // Start editing
         setEditingGuestId(guest._id);
       }
     } catch (error) {
       console.error('Error editing guest:', error);
-      alert('Error editing guest: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      toast.error('❌ שגיאה בעדכון האורח. אנא נסה שוב.');
     }
   };
 
-  const handleDeleteGuest = async (guestId: string) => {
-    if (confirm('האם אתה בטוח שברצונך למחוק אורח זה?')) {
-      try {
-        await deleteGuest(guestId);
-      } catch (error) {
-        console.error('Failed to delete guest:', error);
-        alert('Failed to delete guest. Please try again.');
-      }
+  const handleDeleteGuest = async (guestId: string, guestName: string) => {
+    const confirm = window.confirm(`האם אתה בטוח שברצונך למחוק את ${guestName}?`);
+    if (!confirm) {
+      return;
+    }
+    
+    try {
+      await deleteGuest(guestId);
+      toast.success(`🗑️ ${guestName} נמחק בהצלחה`);
+    } catch (error) {
+      console.error('Failed to delete guest:', error);
+      toast.error('❌ שגיאה במחיקת האורח. אנא נסה שוב.');
     }
   };
 
-  const handleConfirmGuest = async (guestId: string, status: boolean | null) => {
+  const handleConfirmGuest = async (guestId: string, status: boolean | null, guestName: string) => {
     try {
       await confirmGuest(guestId, status);
+      const statusText = status === true ? 'אישר/ה הגעה' : status === false ? 'לא מגיע/ה' : 'ממתין לאישור';
+      toast.success(`✅ ${guestName}: ${statusText}`);
     } catch (error) {
       console.error('Failed to update guest status:', error);
-      alert('Failed to update guest status. Please try again.');
+      toast.error('❌ שגיאה בעדכון סטטוס האורח. אנא נסה שוב.');
     }
   };
 
@@ -223,7 +231,7 @@ export function GuestTable({ onAddGuest }: GuestTableProps) {
                   <td className="px-2 py-4 whitespace-nowrap text-center">
                     <div className="grid grid-cols-3 gap-1 w-[120px] mx-auto">
                       <button
-                        onClick={() => handleConfirmGuest(guest._id, true)}
+                        onClick={() => handleConfirmGuest(guest._id, true, guest.name)}
                         className={`p-1 rounded-full flex items-center justify-center ${guest.isConfirmed === true ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                         title="אישר/ה הגעה"
                       >
@@ -232,7 +240,7 @@ export function GuestTable({ onAddGuest }: GuestTableProps) {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleConfirmGuest(guest._id, false)}
+                        onClick={() => handleConfirmGuest(guest._id, false, guest.name)}
                         className={`p-1 rounded-full flex items-center justify-center ${guest.isConfirmed === false ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                         title="לא מגיע/ה"
                       >
@@ -241,7 +249,7 @@ export function GuestTable({ onAddGuest }: GuestTableProps) {
                         </svg>
                       </button>
                       <button
-                        onClick={() => handleConfirmGuest(guest._id, null)}
+                        onClick={() => handleConfirmGuest(guest._id, null, guest.name)}
                         className={`p-1 rounded-full flex items-center justify-center ${guest.isConfirmed === null ? 'bg-yellow-500 text-white' : 'bg-gray-200 text-gray-500'} hover:opacity-80 transition-opacity`}
                         title="ממתין/ה לאישור"
                       >
@@ -282,7 +290,7 @@ export function GuestTable({ onAddGuest }: GuestTableProps) {
                           </svg>
                         </button>
                         <button 
-                          onClick={() => handleDeleteGuest(guest._id)} 
+                          onClick={() => handleDeleteGuest(guest._id, guest.name)} 
                           className="text-red-600 hover:text-red-900 p-1 hover:bg-red-100 rounded-full transition-colors"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 
 // Context and Providers
 import { QueryProvider } from './providers/QueryProvider';
-import { GuestProvider } from './context/GuestContext';
+import { GuestProvider, useGuests } from './context/GuestContext';
 
 // Components
 import { GuestStats } from './components/GuestStats';
@@ -45,37 +45,38 @@ function GuestlistPageContent({ userId: _userId }: GuestlistPageContentProps) {
   } | null>(null);
   const [showImportStatus, setShowImportStatus] = useState(false);
 
+  // Get the import function from the guest context
+  const { importGuests } = useGuests();
+
   const handleImport = async (file: File) => {
     setIsImporting(true);
     setImportStatus(null);
     setImportProgress({ current: 0, total: 0, currentName: '' });
 
     try {
-      // Here we would integrate with the guestService.importGuests
-      // For now, we'll simulate the import process
-      // In a real implementation, this would be handled by the context
-      console.log('Starting import for file:', file.name);
+      console.log('🚀 Starting Excel import for file:', file.name);
       
-      // Mock progress updates
-      setImportProgress({ current: 1, total: 10, currentName: 'דוגמה...' });
+      // Use the actual import function with progress callback
+      const result = await importGuests(file, (current, total, currentName) => {
+        setImportProgress({ current, total, currentName });
+      });
       
-      // This would be replaced with actual import logic
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('📊 Import result:', result);
       
       setImportStatus({
-        success: 8,
-        error: 2,
-        errorDetails: {
-          missingName: 1,
-          apiErrors: 1,
-          invalidPhone: 0,
-          otherErrors: 0
-        }
+        success: result.success,
+        error: result.error,
+        errorDetails: result.errorDetails
       });
       setShowImportStatus(true);
       
+      // Show success message with details
+      if (result.success > 0) {
+        console.log(`✅ Successfully imported ${result.success} guests`);
+      }
+      
     } catch (error) {
-      console.error('Import error:', error);
+      console.error('❌ Import error:', error);
       setImportStatus({
         success: 0,
         error: 1,
@@ -84,6 +85,8 @@ function GuestlistPageContent({ userId: _userId }: GuestlistPageContentProps) {
       setShowImportStatus(true);
     } finally {
       setIsImporting(false);
+      setImportProgress({ current: 0, total: 0, currentName: '' });
+      console.log('🏁 Import process completed');
     }
   };
 

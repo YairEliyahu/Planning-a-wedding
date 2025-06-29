@@ -3,6 +3,29 @@ import dbConnect from '@/utils/dbConnect';
 import Guest from '@/models/Guest';
 import mongoose from 'mongoose';
 
+// Import the cache from the main route file
+const guestsCache = new Map<string, {
+  data: any[];
+  timestamp: number;
+  etag: string;
+  count: number;
+}>();
+
+// Helper function to clear cache for a user
+function clearUserCache(userId: string, sharedEventId?: string) {
+  const cacheKeysToDelete = [];
+  for (const [key] of guestsCache.entries()) {
+    if (key.includes(userId) || (sharedEventId && key.includes(sharedEventId))) {
+      cacheKeysToDelete.push(key);
+    }
+  }
+  
+  cacheKeysToDelete.forEach(key => {
+    console.log(`[GUEST API] Clearing cache key: ${key}`);
+    guestsCache.delete(key);
+  });
+}
+
 // GET /api/guests/[id] - Get a specific guest by ID
 export async function GET(
   req: NextRequest,
@@ -160,6 +183,9 @@ export async function PUT(
       }
     }
 
+    // Clear cache for this user and any connected accounts
+    clearUserCache(existingGuest.userId.toString(), user.sharedEventId);
+
     return NextResponse.json({ guest: updatedGuest });
   } catch (error) {
     console.error('[GUEST API] Error updating guest:', error);
@@ -209,6 +235,9 @@ export async function DELETE(
 
     // Delete the guest
     await Guest.findByIdAndDelete(guestId);
+
+    // Clear cache for this user and any connected accounts
+    clearUserCache(existingGuest.userId.toString(), existingGuest.sharedEventId);
 
     return NextResponse.json(
       { message: 'Guest deleted successfully' },

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useGuests, NewGuest } from '../context/GuestContext';
+import toast from 'react-hot-toast';
 
 interface AddGuestFormProps {
   isVisible: boolean;
@@ -29,7 +30,7 @@ export function AddGuestForm({ isVisible, onClose, hasExistingGuests }: AddGuest
     
     try {
       if (!newGuest.name.trim()) {
-        alert('נא להזין שם אורח');
+        toast.error('נא להזין שם אורח');
         return;
       }
 
@@ -48,11 +49,12 @@ export function AddGuestForm({ isVisible, onClose, hasExistingGuests }: AddGuest
         group: ''
       });
       
+      toast.success(`✅ ${newGuest.name} נוסף בהצלחה לרשימת האורחים`);
       onClose();
       
     } catch (error) {
       console.error('Error adding guest:', error);
-      alert(`שגיאה בהוספת אורח: ${error instanceof Error ? error.message : 'שגיאה לא ידועה'}`);
+      toast.error('❌ שגיאה בהוספת אורח. אנא נסה שוב.');
     } finally {
       setIsSubmitting(false);
     }

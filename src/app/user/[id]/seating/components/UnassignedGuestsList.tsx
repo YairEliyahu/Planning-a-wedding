@@ -25,12 +25,15 @@ export default function UnassignedGuestsList({ guests, getGuestStatusInfo }: Una
           {guests.filter(g => g.isConfirmed === false).length} סירבו • {' '}
           {guests.filter(g => g.isConfirmed === null).length} ממתינים
         </div>
+        <div className="text-xs text-blue-600 mt-2 bg-blue-50 p-2 rounded">
+          💡 גרור אורחים מאושרים או בהמתנה לשולחנות • לחץ על שולחן לפרטים נוספים
+        </div>
       </h3>
       
       <div className="space-y-2 max-h-96 overflow-y-auto">
         {guests.map((guest) => {
           const statusInfo = getGuestStatusInfo(guest);
-          const isAssignable = guest.isConfirmed === true;
+          const isAssignable = guest.isConfirmed === true || guest.isConfirmed === null;
           
           return (
             <div
@@ -42,6 +45,7 @@ export default function UnassignedGuestsList({ guests, getGuestStatusInfo }: Una
               onDragStart={(e: React.DragEvent) => {
                 if (isAssignable) {
                   e.dataTransfer.setData('application/json', JSON.stringify(guest));
+                  e.dataTransfer.effectAllowed = 'move';
                 } else {
                   e.preventDefault();
                 }
@@ -72,7 +76,11 @@ export default function UnassignedGuestsList({ guests, getGuestStatusInfo }: Una
                 </div>
               </motion.div>
               <div className="text-xs text-gray-400 mt-1 font-[var(--font-heebo)]">
-                {isAssignable ? 'גרור לשולחן או לחץ כדי להקצות' : 'ניתן להושיב רק אורחים מאושרים'}
+                {isAssignable ? (
+                  'גרור לשולחן כדי להושיב'
+                ) : (
+                  'ניתן להושיב רק אורחים מאושרים או בהמתנה'
+                )}
               </div>
             </div>
           );

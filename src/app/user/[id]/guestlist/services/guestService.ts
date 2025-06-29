@@ -159,7 +159,12 @@ class GuestService {
     return data;
   }
 
-  async importGuests(file: File, userId: string, sharedEventId?: string): Promise<{ 
+  async importGuests(
+    file: File, 
+    userId: string, 
+    sharedEventId?: string,
+    onProgress?: (current: number, total: number, currentName: string) => void
+  ): Promise<{ 
     success: number, 
     error: number,
     errorDetails?: {
@@ -217,16 +222,23 @@ class GuestService {
           let apiErrorCount = 0;
           let otherErrorCount = 0;
 
-          // Process each row
-          for (const row of filteredRows) {
+          // Process each row with progress tracking
+          for (let i = 0; i < filteredRows.length; i++) {
+            const row = filteredRows[i];
+            
             try {
               const processed = this.processExcelRow(row as Record<string, any>, userId, sharedEventId);
               
               if (!processed) {
                 errorCount++;
                 missingNameCount++;
+                // Report progress even for failed rows
+                onProgress?.(i + 1, filteredRows.length, `שורה ${i + 1} - שגיאה`);
                 continue;
               }
+
+              // Report progress with current guest name
+              onProgress?.(i + 1, filteredRows.length, processed.name);
 
               const response = await fetch(this.apiBase, {
                 method: 'POST',
@@ -241,11 +253,14 @@ class GuestService {
               } else {
                 errorCount++;
                 apiErrorCount++;
+                const errorData = await response.text();
+                console.error(`❌ API error for ${processed.name}:`, errorData);
               }
             } catch (error) {
               console.error('Error processing row:', error, row);
               errorCount++;
               otherErrorCount++;
+              onProgress?.(i + 1, filteredRows.length, `שורה ${i + 1} - שגיאה`);
             }
           }
           
@@ -272,48 +287,83 @@ class GuestService {
   private processExcelRow(row: Record<string, any>, userId: string, sharedEventId?: string): NewGuest & { userId: string } | null {
     const columnKeys = Object.keys(row);
     
-    // Find name column
-    let nameColumn = this.findColumn(columnKeys, ['שם המוזמן', 'שם', 'name']);
-    if (!nameColumn && columnKeys.length > 0) {
-      nameColumn = columnKeys[0];
+    // Fixed column order as requested:
+    // Column 1: Name (שם המוזמן)
+    // Column 2: Number of guests (מספר מוזמנים) 
+    // Column 3: Phone (טלפון)
+    // Column 4: Group (קבוצה)
+    // Column 5: Side (צד - חתן/כלה/משותף)
+    
+    if (columnKeys.length < 1) {
+      return null; // Need at least name column
     }
     
-    const guestName = String(row[nameColumn] || '').trim();
+    // Get name from first column
+    const guestName = String(row[columnKeys[0]] || '').trim();
     if (!guestName) {
       return null;
     }
 
-    // Find other columns
-    const phoneColumn = this.findColumn(columnKeys, ['ניוד', 'טלפון', 'phone', 'נייד']);
-    const guestsColumn = this.findColumn(columnKeys, ['מספר מוזמנים', 'מספר אורחים', 'כמות']);
-    const sideColumn = this.findColumn(columnKeys, ['מתאם של...', 'צד', 'שיוך']);
-    const groupColumn = this.findColumn(columnKeys, ['קבוצה', 'group', 'סוג']);
-    const notesColumn = this.findColumn(columnKeys, ['הערות', 'notes']);
-
-    // Process phone number
-    let phoneNumber = '';
-    if (phoneColumn && row[phoneColumn]) {
-      phoneNumber = this.processPhoneNumber(String(row[phoneColumn]));
-    }
-
-    // Process number of guests
+    // Get number of guests from second column (if exists)
     let numberOfGuests = 1;
-    if (guestsColumn && row[guestsColumn]) {
-      const value = row[guestsColumn];
+    if (columnKeys.length >= 2 && row[columnKeys[1]]) {
+      const value = row[columnKeys[1]];
+      
       if (typeof value === 'number') {
-        numberOfGuests = Math.max(0, Math.round(value));
+        numberOfGuests = Math.max(1, Math.round(value));
       } else if (typeof value === 'string') {
-        const parsed = parseInt(value.replace(/[^\d]/g, ''));
-        if (!isNaN(parsed)) {
-          numberOfGuests = Math.max(0, parsed);
+        const stringValue = value.trim().toLowerCase();
+        
+        // Handle specific Hebrew/English patterns
+        if (stringValue.includes('זוג') || stringValue.includes('pair') || stringValue.includes('couple')) {
+          numberOfGuests = 2;
+        } else if (stringValue.includes('משפחה') || stringValue.includes('family')) {
+          numberOfGuests = 4; // Default family size
+        } else if (stringValue.includes('יחיד') || stringValue.includes('single') || stringValue.includes('לבד')) {
+          numberOfGuests = 1;
+        } else {
+          // Extract numbers from text like "3", "3 אנשים", "שלושה", etc.
+          const numberMatch = stringValue.match(/\d+/);
+          if (numberMatch) {
+            const parsed = parseInt(numberMatch[0]);
+            if (!isNaN(parsed) && parsed > 0) {
+              numberOfGuests = Math.min(parsed, 20); // Max 20 to prevent errors
+            }
+          } else {
+            // Handle Hebrew number words
+            const hebrewNumbers: Record<string, number> = {
+              'אחד': 1, 'שניים': 2, 'שלושה': 3, 'ארבעה': 4, 'חמישה': 5,
+              'שישה': 6, 'שבעה': 7, 'שמונה': 8, 'תשעה': 9, 'עשרה': 10,
+              'אחת': 1, 'שתיים': 2
+            };
+            
+            for (const [word, num] of Object.entries(hebrewNumbers)) {
+              if (stringValue.includes(word)) {
+                numberOfGuests = num;
+                break;
+              }
+            }
+          }
         }
       }
     }
 
-    // Determine side
+    // Get phone from third column (if exists)
+    let phoneNumber = '';
+    if (columnKeys.length >= 3 && row[columnKeys[2]]) {
+      phoneNumber = this.processPhoneNumber(String(row[columnKeys[2]]));
+    }
+
+    // Get group from fourth column (if exists)
+    let group = '';
+    if (columnKeys.length >= 4 && row[columnKeys[3]]) {
+      group = String(row[columnKeys[3]]).trim();
+    }
+
+    // Get side from fifth column (if exists)
     let side: 'חתן' | 'כלה' | 'משותף' = 'משותף';
-    if (sideColumn && row[sideColumn]) {
-      const value = String(row[sideColumn]).toLowerCase();
+    if (columnKeys.length >= 5 && row[columnKeys[4]]) {
+      const value = String(row[columnKeys[4]]).toLowerCase();
       if (value.includes('חתן')) {
         side = 'חתן';
       } else if (value.includes('כלה')) {
@@ -321,14 +371,16 @@ class GuestService {
       }
     }
 
-    // Process group
-    let group = '';
-    if (groupColumn && row[groupColumn]) {
-      group = String(row[groupColumn]).trim();
+    // Look for notes in remaining columns (if any)
+    let notes = '';
+    for (let i = 5; i < columnKeys.length; i++) {
+      if (row[columnKeys[i]]) {
+        notes = String(row[columnKeys[i]]).trim();
+        break; // Take first non-empty column as notes
+      }
     }
-
-    // Process notes
-    const notes = notesColumn ? String(row[notesColumn] || '') : '';
+    
+    console.log(`Processing guest: "${guestName}" - ${numberOfGuests} guests, phone: ${phoneNumber}, group: ${group}, side: ${side}`);
 
     return {
       userId,
@@ -341,19 +393,6 @@ class GuestService {
       group,
       ...(sharedEventId && { sharedEventId })
     };
-  }
-
-  private findColumn(columnKeys: string[], keywords: string[]): string | null {
-    for (const key of columnKeys) {
-      const normalizedKey = key.toLowerCase().trim();
-      for (const keyword of keywords) {
-        const normalizedKeyword = keyword.toLowerCase().trim();
-        if (normalizedKey === normalizedKeyword || normalizedKey.includes(normalizedKeyword)) {
-          return key;
-        }
-      }
-    }
-    return null;
   }
 
   private processPhoneNumber(phone: string): string {
@@ -445,6 +484,15 @@ class GuestService {
         'קבוצה': 'עבודה',
         'אישור הגעה': '',
         'הערות': 'חברים משותפים'
+      },
+      {
+        'שם': 'זוג רוזנברג',
+        'טלפון': '053-1112233',
+        'מספר אורחים': 'זוג',
+        'צד': 'חתן',
+        'קבוצה': 'שכונה',
+        'אישור הגעה': '',
+        'הערות': 'דוגמה לזוג'
       }
     ];
 
@@ -456,13 +504,14 @@ class GuestService {
       ['1. מלא את הפרטים בטבלה מתחת לכותרות'],
       ['2. עמודת "שם" היא חובה, שאר העמודות אופציונליות'],
       ['3. עבור "צד" ניתן לרשום: חתן, כלה, או משותף'],
-      ['4. עבור "קבוצה" ניתן לרשום: משפחה, עבודה, חברים, צבא, לימודים, שכונה (או להשאיר ריק)'],
-      ['5. עבור "אישור הגעה" ניתן לרשום: כן, לא, או להשאיר ריק'],
+      ['4. עבור "מספר אורחים" ניתן לרשום: מספר (1,2,3...), "זוג", "משפחה", "יחיד"'],
+      ['5. עבור "קבוצה" ניתן לרשום: משפחה, עבודה, חברים, צבא, לימודים, שכונה'],
+      ['6. עבור "אישור הגעה" ניתן לרשום: כן, לא, או להשאיר ריק'],
       ['']
     ], { origin: 'A1' });
 
     const wscols = [
-      { wch: 20 }, { wch: 15 }, { wch: 8 }, { wch: 10 }, 
+      { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, 
       { wch: 12 }, { wch: 10 }, { wch: 30 }
     ];
     ws['!cols'] = wscols;

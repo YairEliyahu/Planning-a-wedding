@@ -2,7 +2,10 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter, Pacifico, Shrikhand, Heebo } from 'next/font/google';
 import { AuthProvider } from '@/contexts/AuthContext';
+
 import '@fortawesome/fontawesome-free/css/all.min.css';
+// טעינה מוקדמת של Chart.js setup
+import '@/lib/chartSetup';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
 
@@ -58,7 +61,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="he" dir="rtl" className={`${inter.variable} ${pacifico.variable} ${shrikhand.variable} ${heebo.variable}`}>
-      <body style={{ margin: 0, padding: 0 }}>
+      <body 
+        style={{ margin: 0, padding: 0 }}
+        suppressHydrationWarning={true}
+      >
         <AuthProvider>
           <AnimatePresence mode="wait">
             {children}

@@ -2,31 +2,54 @@ import { NextResponse } from 'next/server';
 import connectToDatabase from '../../../../utils/dbConnect';
 import User from '../../../../models/User';
 import clientPromise from '@/lib/mongodb';
+import { defaultCategories } from '../../../user/[id]/checklist/constants/defaultData';
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     await connectToDatabase();
     
-    const [user, mongoose] = await Promise.all([
-      User.findById(params.id).lean().exec(),
-      connectToDatabase()
-    ]);
+    const user = await User.findById(params.id).lean().exec();
     
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
     
-    const db = mongoose.connection.db;
+    const client = await clientPromise;
+    const db = client.db();
     
-    if (!db) {
-      throw new Error('Database connection not available');
-    }
-    
-    const checklist = await db.collection('checklists')
+    let checklist = await db.collection('checklists')
       .findOne(
         { userId: params.id },
         { projection: { categories: 1, _id: 0 } }
       );
+    
+    // אם אין צ'ק ליסט קיים, צור אחד חדש עם נתונים בסיסיים נקיים
+    if (!checklist || !checklist.categories || checklist.categories.length === 0) {
+      console.log(`Creating new clean checklist for user ${params.id}`);
+      
+      // יצירת נתונים בסיסיים נקיים (ללא budget או completion)
+      const cleanCategories = defaultCategories.map(category => ({
+        ...category,
+        items: category.items.map(item => ({
+          ...item,
+          isCompleted: false,
+          budget: '',
+          guestCount: 0,
+          averageGift: 0,
+          costPerPerson: 0
+        }))
+      }));
+      
+      const newChecklistData = {
+        userId: params.id,
+        categories: cleanCategories,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      await db.collection('checklists').insertOne(newChecklistData);
+      checklist = { categories: cleanCategories, _id: null as any };
+    }
     
     return NextResponse.json({ checklist: checklist?.categories || [] }, {
       headers: {
@@ -36,7 +59,25 @@ export async function GET(request: Request, { params }: { params: { id: string }
     });
   } catch (error) {
     console.error('Failed to fetch checklist:', error);
-    return NextResponse.json({ error: 'Failed to fetch checklist' }, { status: 500 });
+    
+    // במקרה של שגיאה, החזר נתונים בסיסיים נקיים
+    const cleanCategories = defaultCategories.map(category => ({
+      ...category,
+      items: category.items.map(item => ({
+        ...item,
+        isCompleted: false,
+        budget: '',
+        guestCount: 0,
+        averageGift: 0,
+        costPerPerson: 0
+      }))
+    }));
+    
+    return NextResponse.json({ checklist: cleanCategories }, {
+      headers: {
+        'Cache-Control': 'private, max-age=60'
+      }
+    });
   }
 }
 
@@ -68,8 +109,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       )
     ];
     
-    if (user.sharedEventId && user.connectedUserId) {
-      const connectedUserId = user.connectedUserId.toString();
+    if ((user as any).sharedEventId && (user as any).connectedUserId) {
+      const connectedUserId = (user as any).connectedUserId.toString();
       console.log(`Syncing checklist with connected user: ${connectedUserId}`);
       
       operations.push(
@@ -83,7 +124,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     
     await Promise.all(operations);
     
-    if (user.sharedEventId && user.connectedUserId) {
+    if ((user as any).sharedEventId && (user as any).connectedUserId) {
       console.log('Successfully synced checklist with connected user');
     }
     

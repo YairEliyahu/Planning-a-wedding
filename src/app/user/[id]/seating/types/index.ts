@@ -77,7 +77,6 @@ export interface SeatingContextType {
   tables: Table[];
   unassignedGuests: Guest[];
   selectedTable: Table | null;
-  selectedTableForDetail: Table | null;
   isLoading: boolean;
   confirmedGuestsCount: number;
   hasShownEventSetup: boolean;
@@ -105,7 +104,6 @@ export interface SeatingContextType {
   setTables: (tables: Table[]) => void;
   setUnassignedGuests: (guests: Guest[]) => void;
   setSelectedTable: (table: Table | null) => void;
-  setSelectedTableForDetail: (table: Table | null) => void;
   setZoomLevel: (zoom: number) => void;
   setMapPosition: (position: MapPosition) => void;
   setBoardDimensions: (dimensions: BoardDimensions) => void;

@@ -168,7 +168,7 @@ guestSchema.statics.getOrganizedGuestList = async function(userId: string, share
 
   // אופטימיזציה: לולאה אחת לכל הסטטיסטיקות
   for (const guest of guests) {
-    organizedGuests.sides[guest.side].push(guest);
+    organizedGuests.sides[guest.side as keyof typeof organizedGuests.sides].push(guest);
     
     const guestCount = guest.numberOfGuests;
     organizedGuests.total += guestCount;

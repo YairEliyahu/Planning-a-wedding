@@ -21,7 +21,8 @@ import ResetButton from './components/ResetButton';
 function ChecklistPageContent({ userId: _userId }: { userId: string }) {
   const { categories, isLoading, error } = useChecklistContext();
 
-  if (isLoading) {
+  // רק טעינה ראשונית מציגה מסך מלא
+  if (isLoading && (!categories || categories.length === 0)) {
     return (
       <LoadingSpinner 
         text="טוען את הצ'קליסט..." 

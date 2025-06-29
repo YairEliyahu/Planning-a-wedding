@@ -55,6 +55,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const initializeAuth = async () => {
       try {
         console.log('Initializing auth...');
+        
+        // בדוק אם יש token ו-user ב-URL parameters (מ-OAuth callback)
+        if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search);
+          const urlToken = urlParams.get('token');
+          const urlUser = urlParams.get('user');
+        
+          if (urlToken && urlUser) {
+            console.log('Found auth data in URL parameters');
+            try {
+              const userData = JSON.parse(decodeURIComponent(urlUser));
+              localStorage.setItem('token', urlToken);
+              localStorage.setItem('user', JSON.stringify(userData));
+              setUser(userData);
+              
+              // נקה את ה-URL parameters
+              const newUrl = new URL(window.location.href);
+              newUrl.searchParams.delete('token');
+              newUrl.searchParams.delete('user');
+              window.history.replaceState({}, '', newUrl.toString());
+              
+              console.log('Successfully processed auth from URL');
+              return;
+            } catch (parseError) {
+              console.error('Error parsing URL auth data:', parseError);
+            }
+          }
+        }
+        
+        // אם לא מצאנו ב-URL, נבדוק ב-localStorage
         const [token, storedUser] = await Promise.all([
           Promise.resolve(localStorage.getItem('token')),
           Promise.resolve(localStorage.getItem('user'))

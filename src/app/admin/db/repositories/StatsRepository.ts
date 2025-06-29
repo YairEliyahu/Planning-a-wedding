@@ -59,8 +59,7 @@ export class StatsRepository implements IStatsRepository {
     const loginPipeline = [
       {
         $match: {
-          lastLogin: { $gte: startDate },
-          lastLogin: { $exists: true, $ne: null }
+          lastLogin: { $gte: startDate, $exists: true, $ne: null }
         }
       },
       {
@@ -97,13 +96,13 @@ export class StatsRepository implements IStatsRepository {
         }
       },
       {
-        $sort: { _id: 1 }
+        $sort: { _id: 1 as const }
       }
     ];
 
     const [loginResults, registrationResults, recentActivity] = await Promise.all([
-      User.aggregate(loginPipeline),
-      User.aggregate(registrationPipeline),
+      User.aggregate(loginPipeline as any),
+      User.aggregate(registrationPipeline as any),
       this.getRecentActivityCount()
     ]);
 

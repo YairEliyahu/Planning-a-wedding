@@ -296,8 +296,9 @@ export default function CategoryPage({ params }: Params) {
       
       <div style={styles.filtersSection}>
         <div style={styles.filterContainer}>
-          <label style={styles.filterLabel}>סנן לפי:</label>
+          <label htmlFor="area-filter" style={styles.filterLabel}>סנן לפי:</label>
           <select 
+            id="area-filter"
             style={styles.filterSelect}
             value={areaFilter}
             onChange={(e) => setAreaFilter(e.target.value)}
@@ -311,6 +312,7 @@ export default function CategoryPage({ params }: Params) {
           </select>
           
           <select 
+            id="price-filter"
             style={styles.filterSelect}
             value={priceFilter}
             onChange={(e) => setPriceFilter(e.target.value)}
@@ -323,8 +325,9 @@ export default function CategoryPage({ params }: Params) {
         </div>
         
         <div style={styles.sortContainer}>
-          <label style={styles.filterLabel}>מיון:</label>
+          <label htmlFor="sort-select" style={styles.filterLabel}>מיון:</label>
           <select 
+            id="sort-select"
             style={styles.filterSelect}
             value={sortOption}
             onChange={(e) => setSortOption(e.target.value)}

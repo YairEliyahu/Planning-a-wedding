@@ -68,7 +68,9 @@ export interface ChecklistContextValue {
   chartData: ChartData;
   
   // UI State
-  isLoading: boolean;
+  isLoading: boolean; // טעינה ראשונית
+  isSaving: boolean; // שמירה ברקע
+  showSaveSuccess: boolean; // הודעת הצלחה עדינה
   error: string;
   isAddingItem: boolean;
   selectedCategory: string;

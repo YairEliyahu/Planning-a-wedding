@@ -20,104 +20,150 @@ function generateSeatingETag(arrangement: any, tables: any[]): string {
   return `"seating-${maxUpdated}-${tables.length}"`;
 }
 
-// GET - קבלת כל הסידורים והשולחנות של המשתמש (תומך במשתמשים משותפים)
+// GET - קבלת סידור הושבה קיים
 export async function GET(request: NextRequest) {
   try {
+    console.log('[SEATING API] GET request started');
+    await connectToDatabase();
+    
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
     const eventId = searchParams.get('eventId');
-    const clientETag = request.headers.get('if-none-match');
+
+    console.log('[SEATING API] Request params:', { userId, eventId });
     
     if (!userId) {
+      console.log('[SEATING API] Missing userId parameter');
       return NextResponse.json(
         { success: false, error: 'User ID is required' },
         { status: 400 }
       );
     }
 
-    // בדיקת מטמון
+    // Check cache first
     const cacheKey = `seating-${userId}-${eventId || 'default'}`;
-    const cachedData = seatingCache.get(cacheKey);
+    const cached = seatingCache.get(cacheKey);
     
-    if (cachedData && Date.now() - cachedData.timestamp < CACHE_TTL) {
-      if (clientETag && clientETag === cachedData.etag) {
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      const etag = request.headers.get('if-none-match');
+      if (etag === cached.etag) {
         return new NextResponse(null, { status: 304 });
       }
-      
-      return NextResponse.json(cachedData.data, {
-        headers: {
-          'ETag': cachedData.etag,
-          'Cache-Control': 'public, max-age=180'
-        }
+      return NextResponse.json(cached.data, {
+        headers: { 'ETag': cached.etag }
       });
     }
 
-    await connectToDatabase();
+    console.log('[SEATING API] Fetching fresh data from database...');
 
-    // Get user with optimized projection
-    const user = await User.findById(userId)
-      .select('sharedEventId')
-      .lean();
-      
+    // Get user info
+    const user = await User.findById(userId).select('sharedEventId');
     if (!user) {
+      console.log('[SEATING API] User not found:', userId);
       return NextResponse.json(
         { success: false, error: 'User not found' },
         { status: 404 }
       );
     }
 
-    // Build optimized queries
+    const effectiveEventId = (user as any).sharedEventId || eventId;
+    console.log('[SEATING API] Using eventId:', effectiveEventId);
+
+    // Build queries
     const baseQuery: any = { isActive: true };
-    const effectiveEventId = user.sharedEventId || eventId;
+    const arrangementQuery: any = { ...baseQuery, isDefault: true };
     
     if (effectiveEventId) {
       baseQuery.eventId = effectiveEventId;
+      arrangementQuery.eventId = effectiveEventId;
     } else {
       baseQuery.userId = userId;
+      arrangementQuery.userId = userId;
     }
 
-    console.log(`[SEATING API] Query for user ${userId}, eventId: ${effectiveEventId}`);
+    console.log('[SEATING API] Database queries:', { baseQuery, arrangementQuery });
 
-    // Parallel queries for better performance
-    const [arrangement, tables] = await Promise.all([
-      SeatingArrangement.findOne({ ...baseQuery, isDefault: true })
-        .lean()
-        .select('-__v'),
+    let arrangement, tables;
+    
+    try {
+      // Find tables for the user/event with populated guest data
+      [arrangement, tables] = await Promise.all([
+        SeatingArrangement.findOne(arrangementQuery)
+          .select('name createdBy isDefault mapBackground venueLayout')
+          .sort({ createdAt: 1 }),
       Table.find(baseQuery)
         .populate({
           path: 'assignments.guestId',
-          select: 'name phoneNumber numberOfGuests side isConfirmed notes group userId'
+            select: 'name phoneNumber numberOfGuests side isConfirmed notes group userId',
+            match: { _id: { $exists: true } } // Only populate if guest still exists
         })
-        .lean()
-        .select('-__v')
+          .select('name capacity shape position assignments color notes')
         .sort({ createdAt: 1 })
     ]);
 
-    // Transform tables efficiently
-    const transformedTables = tables.map((table: any) => ({
+      console.log('[SEATING API] Database results:', {
+        arrangement: !!arrangement,
+        tablesCount: tables.length,
+        tablesWithAssignments: tables.filter(t => t.assignments && t.assignments.length > 0).length
+      });
+
+    } catch (dbError) {
+      console.error('[SEATING API] Database query error:', dbError);
+      return NextResponse.json(
+        { success: false, error: 'Database query failed' },
+        { status: 500 }
+      );
+    }
+
+    // Transform tables with better error handling
+    const transformedTables = (tables || []).map((table: any) => {
+      try {
+        const validAssignments = table.assignments?.filter((assignment: any) => {
+          return assignment && 
+                 assignment.guestId && 
+                 assignment.guestId._id && 
+                 typeof assignment.guestId._id === 'object';
+        }) || [];
+
+        return {
       id: table._id.toString(),
       name: table.name,
       capacity: table.capacity,
       shape: table.shape,
-      x: table.position.x,
-      y: table.position.y,
-      color: table.color,
-      notes: table.notes,
-      guests: table.assignments?.map((assignment: any) => ({
+          x: table.position?.x || 0,
+          y: table.position?.y || 0,
+          color: table.color || '#f59e0b',
+          notes: table.notes || '',
+          guests: validAssignments.map((assignment: any) => ({
         _id: assignment.guestId._id.toString(),
         userId: assignment.guestId.userId,
-        name: assignment.guestId.name,
-        phoneNumber: assignment.guestId.phoneNumber,
-        numberOfGuests: assignment.guestId.numberOfGuests,
-        side: assignment.guestId.side,
+            name: assignment.guestId.name || 'אורח לא ידוע',
+            phoneNumber: assignment.guestId.phoneNumber || '',
+            numberOfGuests: assignment.guestId.numberOfGuests || 1,
+            side: assignment.guestId.side || 'משותף',
         isConfirmed: assignment.guestId.isConfirmed,
-        notes: assignment.guestId.notes,
-        group: assignment.guestId.group,
+            notes: assignment.guestId.notes || '',
+            group: assignment.guestId.group || '',
         tableId: table._id.toString(),
-        seatNumber: assignment.seatNumber,
+            seatNumber: assignment.seatNumber || 1,
         assignedAt: assignment.assignedAt
-      })) || []
-    }));
+          }))
+        };
+      } catch (error) {
+        console.error('Error transforming table:', table._id, error);
+        return {
+          id: table._id.toString(),
+          name: table.name || 'שולחן',
+          capacity: table.capacity || 8,
+          shape: table.shape || 'round',
+          x: table.position?.x || 0,
+          y: table.position?.y || 0,
+          color: table.color || '#f59e0b',
+          notes: table.notes || '',
+          guests: []
+        };
+      }
+    });
 
     const responseData = {
       success: true,
@@ -127,7 +173,7 @@ export async function GET(request: NextRequest) {
       }
     };
 
-    // Generate ETag and cache
+    // Cache the response
     const etag = generateSeatingETag(arrangement, tables);
     seatingCache.set(cacheKey, {
       data: responseData,
@@ -159,13 +205,20 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST - שמירת סידור הושבה חדש או עדכון קיים (אופטימיזציה לביצועים)
+// POST - שמירת סידור הושבה חדש או עדכון קיים
 export async function POST(request: NextRequest) {
   try {
     await connectToDatabase();
     
     const body = await request.json();
     const { userId, eventId, arrangement, tables } = body;
+
+    console.log('[SEATING API] POST request received:', {
+      userId,
+      eventId: eventId || 'none',
+      tablesCount: tables?.length || 0,
+      hasArrangement: !!arrangement
+    });
 
     if (!userId || !tables) {
       return NextResponse.json(
@@ -174,11 +227,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get user info efficiently
-    const user = await User.findById(userId)
-      .select('sharedEventId')
-      .readPreference('primary')
-      .lean();
+    // Get user info - simplified
+    const user = await User.findById(userId).select('sharedEventId');
       
     if (!user) {
       return NextResponse.json(
@@ -187,18 +237,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const effectiveEventId = user.sharedEventId || eventId;
-    console.log(`[SEATING API] Saving seating for user ${userId}, eventId: ${effectiveEventId}`);
+    const effectiveEventId = (user as any).sharedEventId || eventId;
+    console.log(`[SEATING API] Saving seating for user ${userId}, effectiveEventId: ${effectiveEventId}`);
 
-    // Clear cache immediately
+    // Clear cache
     const cacheKey = `seating-${userId}-${eventId || 'default'}`;
     seatingCache.delete(cacheKey);
-
-    // Use transaction for data consistency
-    const session = await Table.startSession();
     
     try {
-      await session.withTransaction(async () => {
         // Handle arrangement if provided
         if (arrangement) {
           const query: any = { isActive: true, isDefault: true };
@@ -209,30 +255,29 @@ export async function POST(request: NextRequest) {
             query.userId = userId;
           }
 
-          const existingArrangement = await SeatingArrangement.findOne(query)
-            .session(session)
-            .readPreference('primary');
+        const existingArrangement = await SeatingArrangement.findOne(query);
 
           if (existingArrangement) {
             Object.assign(existingArrangement, arrangement, { updatedAt: new Date() });
-            await existingArrangement.save({ session });
+          await existingArrangement.save();
           } else {
             const arrangementData: any = {
               ...arrangement,
               isDefault: true,
-              userId: userId
+            userId: userId,
+            isActive: true
             };
 
             if (effectiveEventId) {
               arrangementData.eventId = effectiveEventId;
             }
 
-            await SeatingArrangement.create([arrangementData], { session });
+          await SeatingArrangement.create(arrangementData);
           }
         }
 
-        // Delete existing tables efficiently
-        const deleteQuery: any = {};
+      // Delete existing tables
+      const deleteQuery: any = { isActive: true };
         
         if (effectiveEventId) {
           deleteQuery.eventId = effectiveEventId;
@@ -240,15 +285,14 @@ export async function POST(request: NextRequest) {
           deleteQuery.userId = userId;
         }
 
-        await Table.deleteMany(deleteQuery)
-          .session(session)
-          .readPreference('primary');
+      await Table.deleteMany(deleteQuery);
+      console.log('[SEATING API] Deleted existing tables for query:', deleteQuery);
 
-        // Prepare and save new tables in batch
+      // Create new tables
         const tablesToCreate = tables.map((tableData: any) => {
           const assignments = tableData.guests?.map((guest: any) => ({
             guestId: guest._id,
-            seatNumber: guest.seatNumber,
+          seatNumber: guest.seatNumber || 1,
             assignedAt: new Date()
           })) || [];
 
@@ -275,20 +319,18 @@ export async function POST(request: NextRequest) {
         });
 
         if (tablesToCreate.length > 0) {
-          await Table.create(tablesToCreate, { session });
+        await Table.insertMany(tablesToCreate);
+        console.log(`[SEATING API] Created ${tablesToCreate.length} new tables`);
         }
-      });
-
-      await session.endSession();
 
       return NextResponse.json({
         success: true,
-        message: `Seating arrangement saved successfully with ${tables.length} tables`
+        message: `סידור ההושבה נשמר בהצלחה עם ${tables.length} שולחנות`
       });
 
-    } catch (transactionError) {
-      await session.endSession();
-      throw transactionError;
+    } catch (dbError) {
+      console.error('Database error saving seating arrangement:', dbError);
+      throw dbError;
     }
 
   } catch (error) {

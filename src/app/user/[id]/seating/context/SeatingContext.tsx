@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import toast from 'react-hot-toast';
 import { 
   SeatingContextType, 
   Table, 
@@ -13,8 +14,8 @@ import {
   SideFilter,
   StatusFilter
 } from '../types';
-import { guestService, guestKeys } from '../services/guestService';
-import { seatingService, seatingKeys } from '../services/seatingService';
+import { guestService } from '../services/guestService';
+import { seatingService } from '../services/seatingService';
 
 const SeatingContext = createContext<SeatingContextType | null>(null);
 
@@ -30,7 +31,6 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
   const [tables, setTables] = useState<Table[]>([]);
   const [unassignedGuests, setUnassignedGuests] = useState<Guest[]>([]);
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
-  const [selectedTableForDetail, setSelectedTableForDetail] = useState<Table | null>(null);
   const [confirmedGuestsCount, setConfirmedGuestsCount] = useState(0);
   const [hasShownEventSetup, setHasShownEventSetup] = useState(false);
   
@@ -71,14 +71,16 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     return () => clearTimeout(timeoutId);
   }, [zoomLevel, mapPosition]);
 
-  // Fetch guests query
+  // Fetch guests query - using consistent query key with guestlist
   const { 
     data: guestsData, 
     isLoading: isGuestsLoading,
   } = useQuery({
-    queryKey: guestKeys.byUser(userId),
+    queryKey: ['guests', userId],
     queryFn: () => guestService.fetchGuests(userId),
     enabled: !!userId,
+    staleTime: 30000,
+    refetchInterval: false,
   });
 
   // Fetch seating arrangement query
@@ -86,27 +88,39 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     data: seatingData, 
     isLoading: isSeatingLoading,
   } = useQuery({
-    queryKey: seatingKeys.byUser(userId),
+    queryKey: ['seating', userId],
     queryFn: () => seatingService.fetchSeatingArrangement(userId),
     enabled: !!userId,
   });
 
   // Save seating arrangement mutation
   const saveSeatingMutation = useMutation({
-    mutationFn: (data: { arrangement: SeatingArrangement; tables: Table[] }) =>
-      seatingService.saveSeatingArrangement({
+    mutationFn: (data: { arrangement: SeatingArrangement; tables: Table[] }) => {
+      // Clean companion IDs before sending to API to prevent 500 errors
+      const cleanedTables = data.tables.map(table => ({
+        ...table,
+        guests: table.guests.filter(guest => !guest.isCompanion).map(guest => ({
+          ...guest,
+          // Ensure valid _id format for database
+          _id: guest._id.includes('-companion-') ? guest._id.split('-companion-')[0] : guest._id
+        }))
+      }));
+      
+      return seatingService.saveSeatingArrangement({
         userId,
         arrangement: data.arrangement,
-        tables: data.tables
-      }),
+        tables: cleanedTables
+      });
+    },
     onSuccess: (result) => {
-      alert(result.data.message || 'סידור ההושבה נשמר בהצלחה!');
-      // Invalidate related queries
-      queryClient.invalidateQueries({ queryKey: seatingKeys.byUser(userId) });
+      toast.success(result.data?.message || 'סידור ההושבה נשמר בהצלחה!');
+      // Invalidate related queries - both guest and seating
+      queryClient.invalidateQueries({ queryKey: ['guests', userId] });
+      queryClient.invalidateQueries({ queryKey: ['seating', userId] });
     },
     onError: (error) => {
       console.error('Error saving seating arrangement:', error);
-      alert('שגיאה בשמירת סידור ההושבה. נסו שוב.');
+      toast.error('שגיאה בשמירת סידור ההושבה. נסו שוב.');
     },
   });
 
@@ -125,27 +139,12 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
         const assignedGuestIds = seatingService.getAssignedGuestIds(savedTables);
         const unassigned = transformedGuests.filter(guest => !assignedGuestIds.has(guest._id));
         setUnassignedGuests(unassigned);
-        
-        console.log(`[SEATING] Loaded ${savedTables.length} tables and ${unassigned.length} unassigned guests`);
       } else {
         // No saved arrangement, show all guests as unassigned
         setUnassignedGuests(transformedGuests);
-        console.log(`[SEATING] Loaded ${transformedGuests.length} total guests, no saved seating arrangement`);
       }
     }
   }, [guestsData, seatingData]);
-
-  // Show event setup modal logic
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (tables.length === 0 && !hasShownEventSetup && unassignedGuests.length > 0) {
-        setShowEventSetupModal(true);
-        setHasShownEventSetup(true);
-      }
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [tables.length, hasShownEventSetup, unassignedGuests.length]);
 
   // Business logic functions
   const assignGuestToTable = useCallback((guest: Guest, table: Table) => {
@@ -154,9 +153,9 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     if (currentOccupiedSeats + (guest.numberOfGuests || 1) > table.capacity) {
       const availableSeats = table.capacity - currentOccupiedSeats;
       if (availableSeats <= 0) {
-        alert('השולחן מלא! לא ניתן להוסיף עוד אורחים');
+        toast.error('השולחן מלא! לא ניתן להוסיף עוד אורחים');
       } else {
-        alert(`השולחן לא יכול להכיל את כל האורחים! נותרו ${availableSeats} מקומות פנויים, אך נדרשים ${(guest.numberOfGuests || 1)} מקומות עבור ${guest.name} ומלוויו.`);
+        toast.error(`השולחן לא יכול להכיל את כל האורחים! נותרו ${availableSeats} מקומות פנויים, אך נדרשים ${(guest.numberOfGuests || 1)} מקומות עבור ${guest.name} ומלוויו.`);
       }
       return;
     }
@@ -188,28 +187,31 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     }
 
     setTables(updatedTables);
-    if (selectedTableForDetail && selectedTableForDetail.id === table.id) {
-      setSelectedTableForDetail(targetTable || table);
-    }
     setUnassignedGuests(prev => prev.filter(g => g._id !== guest._id));
-  }, [tables, selectedTableForDetail]);
+    
+    // Success message
+    toast.success(`${guest.name} הוסף לשולחן ${table.name}`);
+  }, [tables]);
 
   const removeGuestFromTable = useCallback((guest: Guest) => {
     const updatedTables = tables.map(table => ({
       ...table,
-      guests: table.guests.filter(g => g._id !== guest._id)
+      guests: table.guests.filter(g => {
+        // Remove main guest and all their companions
+        if (g._id === guest._id) return false;
+        if (g._id.startsWith(`${guest._id}-companion-`)) return false;
+        return true;
+      })
     }));
+    
     setTables(updatedTables);
     
-    if (selectedTableForDetail && selectedTableForDetail.guests.some(g => g._id === guest._id)) {
-      const updatedSelectedTable = updatedTables.find(t => t.id === selectedTableForDetail.id);
-      if (updatedSelectedTable) {
-        setSelectedTableForDetail(updatedSelectedTable);
-      }
-    }
-    
+    // Only add back main guest (not companions) to unassigned
+    if (!guest.isCompanion) {
     setUnassignedGuests(prev => [...prev, { ...guest, tableId: undefined }]);
-  }, [tables, selectedTableForDetail]);
+      toast.success(`${guest.name} הוסר מהשולחן${guest.numberOfGuests > 1 ? ` (כולל ${guest.numberOfGuests - 1} מלווים)` : ''}`);
+    }
+  }, [tables]);
 
   const addNewTable = useCallback((tableData: Partial<Table> = {}) => {
     const newTable = seatingService.createNewTable(tables, tableData);
@@ -261,7 +263,7 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     const confirmedGuests = unassignedGuests.filter(guest => guest.isConfirmed);
     
     if (confirmedGuests.length === 0) {
-      alert('אין אורחים מאושרים להושבה אוטומטית');
+      toast('אין אורחים מאושרים להושבה אוטומטית', { icon: 'ℹ️' });
       return;
     }
     
@@ -295,11 +297,15 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     }
     
     if (failedAssignments.length > 0) {
-      const failedGuestsCount = failedAssignments.reduce((total, g) => total + g.numberOfGuests, 0);
-      alert(`הושבה אוטומטית הושלמה!\n\n✅ הושבו בהצלחה: ${assignedCount} מוזמנים\n\n❌ לא ניתן להושיב: ${failedAssignments.length} מוזמנים (${failedGuestsCount} מקומות) - אין מספיק מקום רצוף בשולחנות הקיימים.`);
+      toast(`הושבה אוטומטית הושלמה! הושבו ${assignedCount} מוזמנים, ${failedAssignments.length} לא ניתן להושיב (אין מקום)`, { 
+        icon: '⚠️', 
+        duration: 6000 
+      });
     } else {
       const totalSeated = confirmedGuests.reduce((total, g) => total + g.numberOfGuests, 0);
-      alert(`🎉 הושבה אוטומטית הושלמה בהצלחה!\n\nכל ${confirmedGuests.length} המוזמנים המאושרים הושבו (${totalSeated} מקומות סה"כ).`);
+      toast.success(`🎉 הושבה אוטומטית הושלמה! כל ${confirmedGuests.length} המוזמנים הושבו (${totalSeated} מקומות)`, {
+        duration: 5000
+      });
     }
   }, [unassignedGuests, tables, assignGuestToTable]);
 
@@ -327,7 +333,6 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     tables,
     unassignedGuests,
     selectedTable,
-    selectedTableForDetail,
     isLoading,
     confirmedGuestsCount,
     hasShownEventSetup,
@@ -355,7 +360,6 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     setTables,
     setUnassignedGuests,
     setSelectedTable,
-    setSelectedTableForDetail,
     setZoomLevel,
     setMapPosition,
     setBoardDimensions,
