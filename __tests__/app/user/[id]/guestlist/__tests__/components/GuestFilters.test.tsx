@@ -1,11 +1,11 @@
 import React from 'react';
 import { render } from '@testing-library/react';
-import { GuestFilters } from '../../components/GuestFilters';
-import { mockFilters } from '../mocks/mockData';
+import { GuestFilters } from '@/app/user/[id]/guestlist/components/GuestFilters';
 
 // Mock the context
+const mockFilters = { side: 'all', status: 'all', search: '' };
 const mockSetFilters = jest.fn();
-jest.mock('../../context/GuestContext', () => ({
+jest.mock('@/app/user/[id]/guestlist/context/GuestContext', () => ({
   useGuests: () => ({
     filters: mockFilters,
     setFilters: mockSetFilters,

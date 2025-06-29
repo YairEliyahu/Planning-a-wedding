@@ -3,12 +3,11 @@
 import React from 'react';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useGuests, GuestProvider } from '../../context/GuestContext';
-import { guestService } from '../../services/guestService';
+import { GuestProvider, useGuests } from '@/app/user/[id]/guestlist/context/GuestContext';
 import { mockGuests, mockNewGuest } from '../mocks/mockData';
 
 // Mock the service
-jest.mock('../../services/guestService', () => ({
+jest.mock('@/app/user/[id]/guestlist/services/guestService', () => ({
   guestService: {
     fetchGuests: jest.fn(),
     addGuest: jest.fn(),
@@ -32,6 +31,8 @@ jest.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
+// Import the mocked service
+import { guestService } from '@/app/user/[id]/guestlist/services/guestService';
 const mockGuestService = guestService as jest.Mocked<typeof guestService>;
 
 const TestWrapper = ({ children }: { children: React.ReactNode }) => {

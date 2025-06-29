@@ -1,14 +1,15 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { AddGuestForm } from '../../components/AddGuestForm';
+import { AddGuestForm } from '@/app/user/[id]/guestlist/components/AddGuestForm';
 import { mockNewGuest } from '../mocks/mockData';
 
 // Mock the context
 const mockAddGuest = jest.fn();
-jest.mock('../../context/GuestContext', () => ({
+jest.mock('@/app/user/[id]/guestlist/context/GuestContext', () => ({
   useGuests: () => ({
     addGuest: mockAddGuest,
     guests: [],
+    isLoading: false,
   }),
 }));
 

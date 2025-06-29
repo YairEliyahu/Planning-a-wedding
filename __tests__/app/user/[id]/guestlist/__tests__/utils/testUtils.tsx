@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { GuestProvider } from '../../context/GuestContext';
+import { GuestProvider } from '@/app/user/[id]/guestlist/context/GuestContext';
 import { createMockQueryClient } from '../mocks/queryClient';
 
 // Custom render function with providers

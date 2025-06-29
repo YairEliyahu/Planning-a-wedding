@@ -1,17 +1,17 @@
 import React from 'react';
-import { render } from '@testing-library/react';
-import { GuestTable } from '../../components/GuestTable';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { GuestTable } from '@/app/user/[id]/guestlist/components/GuestTable';
+import { useGuests } from '@/app/user/[id]/guestlist/context/GuestContext';
 import { mockGuests } from '../mocks/mockData';
 
 // Mock the context
-jest.mock('../../context/GuestContext', () => ({
+jest.mock('@/app/user/[id]/guestlist/context/GuestContext', () => ({
   useGuests: () => ({
     filteredGuests: mockGuests,
     isLoading: false,
-    error: null,
     updateGuest: jest.fn(),
     deleteGuest: jest.fn(),
-    confirmGuest: jest.fn(),
+    setEditingGuest: jest.fn(),
   }),
 }));
 
