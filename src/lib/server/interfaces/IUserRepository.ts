@@ -1,4 +1,4 @@
-import { AdminUser, UserStats } from '../../types/admin';
+import { AdminUser, UserStats } from '@/app/admin/types/admin';
 
 export interface IUserRepository {
   // Single Responsibility - ניהול משתמשים בלבד

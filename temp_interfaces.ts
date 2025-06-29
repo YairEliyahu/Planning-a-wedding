@@ -1,1 +1,1 @@
-import { AdminUser, UserStats } from '../../types/admin';
+import { AdminUser, UserStats } from './src/app/admin/types/admin';
