@@ -6,7 +6,7 @@ import Navbar from '@/components/Navbar';
 
 // Import Providers
 import { QueryProvider } from './providers/QueryProvider';
-import { SeatingProvider } from './context/SeatingContext';
+import { SeatingProvider, useSeating } from './context';
 
 // Import Components
 import UnassignedGuestsList from './components/UnassignedGuestsList';
@@ -16,7 +16,6 @@ import EventSetupModal from './components/EventSetupModal';
 import TableDetailModal from './components/TableDetailModal';
 import AddTableModal from './components/AddTableModal';
 import ClearConfirmModal from './components/ClearConfirmModal';
-import { useSeating } from './context/SeatingContext';
 
 // Main component with context
 function SeatingArrangementsContent() {
@@ -26,6 +25,8 @@ function SeatingArrangementsContent() {
     unassignedGuests,
     isLoading,
     confirmedGuestsCount,
+    isAutoSaving,
+    lastSaved,
     
     // Modal states
     showEventSetupModal,
@@ -44,7 +45,6 @@ function SeatingArrangementsContent() {
     getGuestStatusInfo,
     generateTableLayout,
     smartAutoAssignGuests,
-    saveSeatingArrangement,
   } = useSeating();
 
   if (isLoading) {
@@ -74,6 +74,26 @@ function SeatingArrangementsContent() {
                 <p className="text-gray-600 mt-2 font-[var(--font-heebo)]">
                   ארגנו את האורחים שלכם בשולחנות בצורה אופטימלית
                 </p>
+                
+                {/* Auto-save status indicator */}
+                <div className="flex items-center gap-2 mt-2">
+                  {isAutoSaving ? (
+                    <div className="flex items-center gap-2 text-blue-600 text-sm font-[var(--font-heebo)]">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                      <span>שומר...</span>
+                    </div>
+                  ) : lastSaved ? (
+                    <div className="flex items-center gap-2 text-green-600 text-sm font-[var(--font-heebo)]">
+                      <span>💾</span>
+                      <span>נשמר אוטומטית {lastSaved.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 text-gray-500 text-sm font-[var(--font-heebo)]">
+                      <span>💾</span>
+                      <span>שמירה אוטומטית פעילה</span>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div className="flex flex-wrap gap-2">
@@ -95,7 +115,7 @@ function SeatingArrangementsContent() {
                     <button
                       onClick={smartAutoAssignGuests}
                     className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors font-[var(--font-heebo)] text-sm"
-                      disabled={unassignedGuests.filter(g => g.isConfirmed).length === 0}
+                      disabled={unassignedGuests.filter((g: any) => g.isConfirmed).length === 0}
                     >
                       🧠 הושבה חכמה
                   </button>
@@ -106,13 +126,6 @@ function SeatingArrangementsContent() {
                   className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors font-[var(--font-heebo)] text-sm"
                 >
                   🗑️ נקה הכל
-                    </button>
-                    
-                    <button
-                      onClick={saveSeatingArrangement}
-                  className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors font-[var(--font-heebo)] text-sm"
-                    >
-                  💾 שמור סידור
                     </button>
               </div>
             </div>
@@ -126,6 +139,7 @@ function SeatingArrangementsContent() {
                 • <strong>לחץ</strong> על שולחן לפתיחת פרטים והוספת אורחים
                 • <strong>רחף</strong> עם העכבר על אורח בשולחן ולחץ ❌ להסרה
                 • <strong>גרור</strong> שולחנות למיקום חדש במפה
+                • <strong>שמירה אוטומטית</strong> - כל שינוי נשמר אוטומטית תוך 2 שניות
               </div>
             </div>
           </div>

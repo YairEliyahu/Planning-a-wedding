@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useSeating } from '../context/SeatingContext';
+import { useSeating } from '../context';
 import { MapPosition } from '../types';
 
 export default function SeatingMap() {
@@ -233,12 +233,12 @@ export default function SeatingMap() {
                     {table.name}
                   </div>
                   <div className="text-xs font-[var(--font-heebo)] text-gray-500">
-                    {table.guests.reduce((total, g) => total + g.numberOfGuests, 0)}/{table.capacity}
+                    {table.guests.filter(g => !g.isCompanion).reduce((total, g) => total + g.numberOfGuests, 0)}/{table.capacity}
                   </div>
                 </div>
                 
                 {/* Guest indicators around table */}
-                {table.guests.map((guest, index) => {
+                {table.guests.filter(g => !g.isCompanion).map((guest, index) => {
                   const angle = (index / table.capacity) * 2 * Math.PI;
                   const radius = 50;
                   const x = Math.cos(angle) * radius;
@@ -256,32 +256,56 @@ export default function SeatingMap() {
                       {/* Guest Avatar */}
                       <div
                         className={`w-6 h-6 rounded-full flex items-center justify-center text-xs transition-all duration-200 ${
-                          guest.isCompanion 
-                            ? 'bg-purple-500 text-white border border-purple-600' 
-                            : guest.isConfirmed === true 
-                              ? 'bg-green-500 text-white border border-green-600'
-                              : guest.isConfirmed === null
-                                ? 'bg-yellow-500 text-white border border-yellow-600'
-                                : 'bg-red-500 text-white border border-red-600'
+                          guest.isConfirmed === true 
+                            ? 'bg-green-500 text-white border border-green-600'
+                            : guest.isConfirmed === null
+                              ? 'bg-yellow-500 text-white border border-yellow-600'
+                              : 'bg-red-500 text-white border border-red-600'
                         }`}
-                        title={`${guest.name}${guest.isCompanion ? ' (מלווה)' : ''}`}
+                        title={`${guest.name}${guest.numberOfGuests > 1 ? ` + ${guest.numberOfGuests - 1} מלווים` : ''}`}
                       >
-                        {guest.isCompanion ? '👥' : '👤'}
+                        {guest.numberOfGuests > 1 ? guest.numberOfGuests : '👤'}
                       </div>
                       
                       {/* Remove Button - Shows on Hover */}
-                      {!guest.isCompanion && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeGuestFromTable(guest);
-                          }}
-                          className="absolute -top-2 -right-2 w-4 h-4 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-600 flex items-center justify-center"
-                          title={`הסר את ${guest.name} מהשולחן`}
-                        >
-                          ×
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeGuestFromTable(guest);
+                        }}
+                        className="absolute -top-2 -right-2 w-4 h-4 bg-red-500 text-white rounded-full text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-600 flex items-center justify-center"
+                        title={`הסר את ${guest.name} מהשולחן`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  );
+                })}
+                
+                {/* Companion indicators on the table */}
+                {table.guests.filter(g => g.isCompanion).map((companion, index) => {
+                  // Position companions in a smaller circle inside the table
+                  const angle = (index / 8) * 2 * Math.PI; // 8 positions around the table
+                  const radius = 25; // Smaller radius for companions
+                  const x = Math.cos(angle) * radius;
+                  const y = Math.sin(angle) * radius;
+                  
+                  return (
+                    <div
+                      key={companion._id}
+                      className="absolute"
+                      style={{
+                        left: `calc(50% + ${x}px - 8px)`,
+                        top: `calc(50% + ${y}px - 8px)`,
+                      }}
+                    >
+                      {/* Companion Avatar */}
+                      <div
+                        className={'w-4 h-4 rounded-full flex items-center justify-center text-xs transition-all duration-200 bg-purple-500 text-white border border-purple-600'}
+                        title={`מלווה של ${companion.name.replace('מלווה של ', '')}`}
+                      >
+                        👥
+                      </div>
                     </div>
                   );
                 })}

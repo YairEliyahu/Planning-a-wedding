@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { 
@@ -33,6 +33,12 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [confirmedGuestsCount, setConfirmedGuestsCount] = useState(0);
   const [hasShownEventSetup, setHasShownEventSetup] = useState(false);
+  
+  // Auto-save state
+  const [isAutoSaving, setIsAutoSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastSavedDataRef = useRef<string>('');
   
   // Map controls
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -91,10 +97,12 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     queryKey: ['seating', userId],
     queryFn: () => seatingService.fetchSeatingArrangement(userId),
     enabled: !!userId,
+    staleTime: 60000, // 1 minute cache
+    gcTime: 300000, // 5 minutes garbage collection
   });
 
-  // Save seating arrangement mutation
-  const saveSeatingMutation = useMutation({
+  // Auto-save seating arrangement mutation
+  const autoSaveSeatingMutation = useMutation({
     mutationFn: (data: { arrangement: SeatingArrangement; tables: Table[] }) => {
       // Clean companion IDs before sending to API to prevent 500 errors
       const cleanedTables = data.tables.map(table => ({
@@ -112,17 +120,89 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
         tables: cleanedTables
       });
     },
+    onMutate: () => {
+      setIsAutoSaving(true);
+    },
     onSuccess: (result) => {
-      toast.success(result.data?.message || 'סידור ההושבה נשמר בהצלחה!');
-      // Invalidate related queries - both guest and seating
-      queryClient.invalidateQueries({ queryKey: ['guests', userId] });
-      queryClient.invalidateQueries({ queryKey: ['seating', userId] });
+      setIsAutoSaving(false);
+      setLastSaved(new Date());
+      lastSavedDataRef.current = JSON.stringify({ tables, unassignedGuests });
+      
+      // Update cache optimistically
+      queryClient.setQueryData(['seating', userId], {
+        success: true,
+        data: {
+          tables: result.data?.tables || tables,
+          message: result.data?.message
+        }
+      });
+      
+      // Show subtle success indicator
+      toast.success('נשמר אוטומטית', { 
+        duration: 2000,
+        icon: '💾',
+        style: {
+          background: '#10B981',
+          color: 'white',
+          fontSize: '14px'
+        }
+      });
     },
     onError: (error) => {
-      console.error('Error saving seating arrangement:', error);
-      toast.error('שגיאה בשמירת סידור ההושבה. נסו שוב.');
+      setIsAutoSaving(false);
+      console.error('Error auto-saving seating arrangement:', error);
+      toast.error('שגיאה בשמירה אוטומטית', { 
+        duration: 3000,
+        icon: '⚠️'
+      });
     },
   });
+
+  // Auto-save function with debouncing
+  const triggerAutoSave = useCallback(() => {
+    // Clear existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Set new timeout for auto-save
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      const currentData = JSON.stringify({ tables, unassignedGuests });
+      
+      // Only save if data has actually changed
+      if (currentData !== lastSavedDataRef.current && tables.length > 0) {
+        const arrangementData = {
+          name: 'סידור הושבה ראשי',
+          description: 'סידור הושבה שנוצר על ידי המשתמש',
+          eventSetup: {
+            guestCount: unassignedGuests.length + tables.reduce((sum, table) => sum + table.guests.length, 0),
+            tableType: 'custom' as const,
+            customCapacity: 8
+          },
+          boardDimensions,
+          isDefault: true
+        };
+
+        autoSaveSeatingMutation.mutate({ arrangement: arrangementData, tables });
+      }
+    }, 2000); // 2 second debounce
+  }, [tables, unassignedGuests, boardDimensions, autoSaveSeatingMutation]);
+
+  // Trigger auto-save when tables or unassigned guests change
+  useEffect(() => {
+    if (tables.length > 0 || unassignedGuests.length > 0) {
+      triggerAutoSave();
+    }
+  }, [tables, unassignedGuests, triggerAutoSave]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Process guests data when loaded
   useEffect(() => {
@@ -139,16 +219,23 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
         const assignedGuestIds = seatingService.getAssignedGuestIds(savedTables);
         const unassigned = transformedGuests.filter(guest => !assignedGuestIds.has(guest._id));
         setUnassignedGuests(unassigned);
+        
+        // Set initial saved data reference
+        lastSavedDataRef.current = JSON.stringify({ tables: savedTables, unassignedGuests: unassigned });
       } else {
         // No saved arrangement, show all guests as unassigned
         setUnassignedGuests(transformedGuests);
+        lastSavedDataRef.current = JSON.stringify({ tables: [], unassignedGuests: transformedGuests });
       }
     }
   }, [guestsData, seatingData]);
 
   // Business logic functions
   const assignGuestToTable = useCallback((guest: Guest, table: Table) => {
-    const currentOccupiedSeats = table.guests.reduce((total, g) => total + (g.numberOfGuests || 1), 0);
+    // Calculate occupied seats only from main guests (not companions)
+    const currentOccupiedSeats = table.guests
+      .filter(g => !g.isCompanion) // Only count main guests
+      .reduce((total, g) => total + (g.numberOfGuests || 1), 0);
     
     if (currentOccupiedSeats + (guest.numberOfGuests || 1) > table.capacity) {
       const availableSeats = table.capacity - currentOccupiedSeats;
@@ -270,7 +357,10 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     const sortedGuests = [...confirmedGuests].sort((a, b) => b.numberOfGuests - a.numberOfGuests);
     
     const getTableAvailableSpace = (table: Table) => {
-      const occupied = table.guests.reduce((total, g) => total + g.numberOfGuests, 0);
+      // Calculate occupied seats only from main guests (not companions)
+      const occupied = table.guests
+        .filter(g => !g.isCompanion) // Only count main guests
+        .reduce((total, g) => total + (g.numberOfGuests || 1), 0);
       return table.capacity - occupied;
     };
     
@@ -309,23 +399,6 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     }
   }, [unassignedGuests, tables, assignGuestToTable]);
 
-  // Save seating arrangement wrapper
-  const saveSeatingArrangement = useCallback(async () => {
-    const arrangementData = {
-      name: 'סידור הושבה ראשי',
-      description: 'סידור הושבה שנוצר על ידי המשתמש',
-      eventSetup: {
-        guestCount: unassignedGuests.length + tables.reduce((sum, table) => sum + table.guests.length, 0),
-        tableType: 'custom' as const,
-        customCapacity: 8
-      },
-      boardDimensions,
-      isDefault: true
-    };
-
-    saveSeatingMutation.mutate({ arrangement: arrangementData, tables });
-  }, [unassignedGuests.length, tables, boardDimensions, saveSeatingMutation]);
-
   const isLoading = isGuestsLoading || isSeatingLoading;
 
   const contextValue: SeatingContextType = {
@@ -336,6 +409,10 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     isLoading,
     confirmedGuestsCount,
     hasShownEventSetup,
+    
+    // Auto-save state
+    isAutoSaving,
+    lastSaved,
     
     // Map controls
     zoomLevel,
@@ -384,7 +461,6 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     getGuestStatusInfo,
     getFilteredGuestsForSearch,
     smartAutoAssignGuests,
-    saveSeatingArrangement,
   };
 
   return (

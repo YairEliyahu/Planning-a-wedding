@@ -81,6 +81,10 @@ export interface SeatingContextType {
   confirmedGuestsCount: number;
   hasShownEventSetup: boolean;
   
+  // Auto-save state
+  isAutoSaving: boolean;
+  lastSaved: Date | null;
+  
   // Map controls
   zoomLevel: number;
   mapPosition: MapPosition;
@@ -128,5 +132,4 @@ export interface SeatingContextType {
   getGuestStatusInfo: (guest: Guest) => GuestStatusInfo;
   getFilteredGuestsForSearch: () => Guest[];
   smartAutoAssignGuests: () => void;
-  saveSeatingArrangement: () => Promise<void>;
 } 
