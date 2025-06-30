@@ -104,6 +104,8 @@ export async function PUT(
     await connectToDatabase();
     const userId = params.id;
     const userData = await request.json();
+    
+    console.log('PUT request body:', userData);
 
     // נקה מטמון בעת עדכון
     userCache.delete(params.id);
@@ -117,15 +119,29 @@ export async function PUT(
       );
     }
     
+    console.log('Before update - user data:', {
+      partnerName: user.partnerName,
+      partnerPhone: user.partnerPhone,
+      partnerEmail: user.partnerEmail
+    });
+    
     // Update the user fields
     Object.assign(user, userData);
     await user.save();
+    
+    console.log('After update - user data:', {
+      partnerName: user.partnerName,
+      partnerPhone: user.partnerPhone,
+      partnerEmail: user.partnerEmail
+    });
     
     // If this user is connected to someone else, sync necessary data
     if (user.connectedUserId) {
       const connectedUser = await User.findById(user.connectedUserId);
       
       if (connectedUser) {
+        console.log('Syncing data with connected user:', connectedUser._id);
+        
         // השדות המשותפים שצריכים להיות מסונכרנים
         const syncFields = [
           'weddingDate', 'expectedGuests', 'weddingLocation', 'budget', 
@@ -135,11 +151,14 @@ export async function PUT(
         // העתקת השדות המשותפים
         syncFields.forEach(field => {
           if (field in userData) {
+            console.log(`Syncing field ${field}:`, user[field]);
             connectedUser[field] = user[field];
           }
         });
         
         await connectedUser.save();
+        console.log('Connected user updated successfully');
+        
         // נקה גם את המטמון של המשתמש המחובר
         userCache.delete(user.connectedUserId.toString());
       }
@@ -168,6 +187,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
+    console.log('PATCH request body:', body);
     await connectToDatabase();
 
     // עידוא שה-ID תקין
@@ -203,6 +223,12 @@ export async function PATCH(
       processedData.budget = processedData.budget.toString();
     }
 
+    console.log('Processed data for update:', {
+      partnerName: processedData.partnerName,
+      partnerPhone: processedData.partnerPhone,
+      partnerEmail: processedData.partnerEmail
+    });
+
     // עדכון המשתמש
     const updatedUser = await User.findByIdAndUpdate(
       params.id,
@@ -233,6 +259,12 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    console.log('Updated user data:', {
+      partnerName: updatedUser.partnerName,
+      partnerPhone: updatedUser.partnerPhone,
+      partnerEmail: updatedUser.partnerEmail
+    });
 
     // יצירת טוקן חדש עם המידע המעודכן
     const token = jwt.sign(

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSync } from '@/contexts/SyncContext';
 import { 
   ChecklistContextValue, 
   FilterType, 
@@ -21,17 +22,21 @@ interface ChecklistProviderProps {
 
 export function ChecklistProvider({ children, userId }: ChecklistProviderProps) {
   const { user } = useAuth();
+  const { emitUpdate } = useSync();
   
+  // Use sharedEventId if exists, otherwise fallback to userId
+  const effectiveId = user?.sharedEventId || userId;
+
   // React Query hooks
-  const { data: categories = [], isLoading, error: queryError } = useChecklist(userId, !!userId);
+  const { data: categories = [], isLoading, error: queryError } = useChecklist(effectiveId, !!effectiveId);
   
   const handleSaveSuccess = () => {
     setShowSaveSuccess(true);
     setTimeout(() => setShowSaveSuccess(false), 2000);
   };
   
-  const updateChecklistMutation = useUpdateChecklist(userId, handleSaveSuccess);
-  const resetChecklistMutation = useResetChecklist(userId);
+  const updateChecklistMutation = useUpdateChecklist(effectiveId, handleSaveSuccess);
+  const resetChecklistMutation = useResetChecklist(effectiveId);
   const { clearUser, invalidateUser } = useClearCache();
 
   // Local state
@@ -58,13 +63,13 @@ export function ChecklistProvider({ children, userId }: ChecklistProviderProps) 
 
       const initialDelay = setTimeout(() => {
         console.log('Initial refresh of checklist for connected accounts');
-        clearUser(userId);
-        invalidateUser(userId);
+        clearUser(effectiveId);
+        invalidateUser(effectiveId);
 
         autoRefreshInterval = setInterval(() => {
           console.log('Auto-refreshing checklist for connected accounts...');
-          clearUser(userId);
-          invalidateUser(userId);
+          clearUser(effectiveId);
+          invalidateUser(effectiveId);
         }, 30000);
       }, 5000);
 
@@ -73,7 +78,7 @@ export function ChecklistProvider({ children, userId }: ChecklistProviderProps) 
         clearInterval(autoRefreshInterval);
       };
     }
-  }, [user, userId, clearUser, invalidateUser]);
+  }, [user, effectiveId, clearUser, invalidateUser]);
 
   // טיפול בשגיאות
   useEffect(() => {
@@ -95,6 +100,18 @@ export function ChecklistProvider({ children, userId }: ChecklistProviderProps) 
       }
     );
     updateChecklistMutation.mutate(updatedCategories);
+    
+    // Send update to partner
+    const item = categories.find(cat => 
+      cat.items.find(item => item.id === itemId)
+    )?.items.find(item => item.id === itemId);
+    if (item) {
+      emitUpdate('checklist', 'update', { 
+        itemId, 
+        isCompleted: !item.isCompleted,
+        item 
+      });
+    }
   };
 
   const addItem = async (categoryName: string) => {
@@ -116,6 +133,13 @@ export function ChecklistProvider({ children, userId }: ChecklistProviderProps) 
     );
 
     updateChecklistMutation.mutate(updatedCategories);
+    
+    // Send update to partner
+    emitUpdate('checklist', 'add', { 
+      categoryName, 
+      item: newItem 
+    });
+    
     setNewItemName('');
     setIsAddingItem(false);
     setSelectedCategory('');

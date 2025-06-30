@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter, Pacifico, Shrikhand, Heebo } from 'next/font/google';
 import { AuthProvider } from '@/contexts/AuthContext';
+import Providers from './providers';
 
 import '@fortawesome/fontawesome-free/css/all.min.css';
 // טעינה מוקדמת של Chart.js setup
@@ -65,38 +66,40 @@ export default function RootLayout({
         style={{ margin: 0, padding: 0 }}
         suppressHydrationWarning={true}
       >
-        <AuthProvider>
-          <AnimatePresence mode="wait">
-            {children}
-          </AnimatePresence>
-          <Toaster
-            position="top-center"
-            reverseOrder={false}
-            toastOptions={{
-              duration: 5000,
-              style: {
-                fontFamily: 'var(--font-heebo)',
-                background: '#fff',
-                color: '#333',
-                boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
-                borderRadius: '8px',
-                padding: '16px',
-              },
-              success: {
-                icon: '✅',
+        <Providers>
+          <AuthProvider>
+            <AnimatePresence mode="wait">
+              {children}
+            </AnimatePresence>
+            <Toaster
+              position="top-center"
+              reverseOrder={false}
+              toastOptions={{
+                duration: 5000,
                 style: {
-                  border: '1px solid #c7f9cc',
+                  fontFamily: 'var(--font-heebo)',
+                  background: '#fff',
+                  color: '#333',
+                  boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
                 },
-              },
-              error: {
-                icon: '❌',
-                style: {
-                  border: '1px solid #ffccd5',
+                success: {
+                  icon: '✅',
+                  style: {
+                    border: '1px solid #c7f9cc',
+                  },
                 },
-              },
-            }}
-          />
-        </AuthProvider>
+                error: {
+                  icon: '❌',
+                  style: {
+                    border: '1px solid #ffccd5',
+                  },
+                },
+              }}
+            />
+          </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

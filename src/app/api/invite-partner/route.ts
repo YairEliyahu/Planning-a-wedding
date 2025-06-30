@@ -48,6 +48,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // עדכון פרטי השותף במשתמש ויצירת sharedEventId
+    user.partnerEmail = partnerEmail;
+    user.partnerName = partnerName;
+    user.partnerPhone = partnerPhone;
+    
+    // יצירת sharedEventId (נשתמש ב-ID של המזמין)
+    if (!user.sharedEventId) {
+      user.sharedEventId = user._id.toString();
+      user.isMainEventOwner = true;
+    }
+    
+    await user.save();
+
     // יצירת טוקן הזמנה
     const invitationToken = jwt.sign(
       {
@@ -60,12 +73,6 @@ export async function POST(request: Request) {
       process.env.JWT_SECRET!,
       { expiresIn: '7d' }
     );
-
-    // עדכון פרטי השותף במשתמש
-    user.partnerEmail = partnerEmail;
-    user.partnerName = partnerName;
-    user.partnerPhone = partnerPhone;
-    await user.save();
 
     // שליחת האימייל
     const invitationLink = `${process.env.NEXTAUTH_URL}/register-with-invitation?token=${invitationToken}`;

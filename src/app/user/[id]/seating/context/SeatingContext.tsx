@@ -3,6 +3,8 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import { useSync } from '@/contexts/SyncContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { 
   SeatingContextType, 
   Table, 
@@ -26,6 +28,11 @@ interface SeatingProviderProps {
 
 export function SeatingProvider({ children, userId }: SeatingProviderProps) {
   const queryClient = useQueryClient();
+  const { emitUpdate } = useSync();
+  const { user } = useAuth();
+
+  // Use sharedEventId if exists, otherwise fallback to userId
+  const effectiveId = user?.sharedEventId || userId;
 
   // Local state
   const [tables, setTables] = useState<Table[]>([]);
@@ -82,9 +89,9 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     data: guestsData, 
     isLoading: isGuestsLoading,
   } = useQuery({
-    queryKey: ['guests', userId],
-    queryFn: () => guestService.fetchGuests(userId),
-    enabled: !!userId,
+    queryKey: ['guests', effectiveId],
+    queryFn: () => guestService.fetchGuests(effectiveId),
+    enabled: !!effectiveId,
     staleTime: 30000,
     refetchInterval: false,
   });
@@ -94,9 +101,9 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
     data: seatingData, 
     isLoading: isSeatingLoading,
   } = useQuery({
-    queryKey: ['seating', userId],
-    queryFn: () => seatingService.fetchSeatingArrangement(userId),
-    enabled: !!userId,
+    queryKey: ['seating', effectiveId],
+    queryFn: () => seatingService.fetchSeatingArrangement(effectiveId),
+    enabled: !!effectiveId,
     staleTime: 60000, // 1 minute cache
     gcTime: 300000, // 5 minutes garbage collection
   });
@@ -115,7 +122,7 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
       }));
       
       return seatingService.saveSeatingArrangement({
-        userId,
+        userId: effectiveId,
         arrangement: data.arrangement,
         tables: cleanedTables
       });
@@ -129,12 +136,17 @@ export function SeatingProvider({ children, userId }: SeatingProviderProps) {
       lastSavedDataRef.current = JSON.stringify({ tables, unassignedGuests });
       
       // Update cache optimistically
-      queryClient.setQueryData(['seating', userId], {
+      queryClient.setQueryData(['seating', effectiveId], {
         success: true,
         data: {
           tables: result.data?.tables || tables,
           message: result.data?.message
         }
+      });
+      
+      // Send update to partner
+      emitUpdate('seating', 'update', { 
+        tables: result.data?.tables || tables
       });
       
       // Show subtle success indicator

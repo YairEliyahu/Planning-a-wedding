@@ -3,6 +3,7 @@
 import { createContext, useContext, ReactNode, useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSync } from '@/contexts/SyncContext';
 import { guestService } from '../services/guestService';
 
 export interface Guest {
@@ -65,7 +66,11 @@ interface GuestProviderProps {
 
 export function GuestProvider({ children, userId }: GuestProviderProps) {
   const { user } = useAuth();
+  const { emitUpdate } = useSync();
   const queryClient = useQueryClient();
+
+  // Use sharedEventId if exists, otherwise fallback to userId
+  const effectiveId = user?.sharedEventId || userId;
 
   // State for filters
   const [filters, setFiltersState] = useState<GuestFilters>({
@@ -84,8 +89,8 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
     isLoading,
     error: queryError
   } = useQuery<Guest[], Error>({
-    queryKey: ['guests', userId],
-    queryFn: () => guestService.fetchGuests(userId),
+    queryKey: ['guests', effectiveId],
+    queryFn: () => guestService.fetchGuests(effectiveId),
     staleTime: 0, // Always consider data stale for immediate updates
     gcTime: 1000 * 60 * 5, // Keep in cache for 5 minutes (renamed from cacheTime in v5)
     refetchOnWindowFocus: true,
@@ -106,15 +111,15 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
   // Helper function to invalidate all guest-related queries
   const invalidateGuestQueries = async () => {
     // Force refetch guest list queries immediately
-    await queryClient.refetchQueries({ queryKey: ['guests', userId] });
+    await queryClient.refetchQueries({ queryKey: ['guests', effectiveId] });
     // Invalidate seating queries (which also depend on guest data)
-    queryClient.invalidateQueries({ queryKey: ['seating', userId] });
+    queryClient.invalidateQueries({ queryKey: ['seating', effectiveId] });
   };
 
   // Simple refresh function for immediate updates
   const simpleRefresh = async () => {
     try {
-      await queryClient.refetchQueries({ queryKey: ['guests', userId] });
+      await queryClient.refetchQueries({ queryKey: ['guests', effectiveId] });
     } catch (error) {
       console.error('❌ Simple refresh failed:', error);
     }
@@ -122,12 +127,15 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
 
   // Mutations
   const addGuestMutation = useMutation({
-    mutationFn: (guest: NewGuest) => guestService.addGuest({ ...guest, userId }),
+    mutationFn: (guest: NewGuest) => guestService.addGuest({ ...guest, userId: effectiveId }),
     onSuccess: async (newGuest) => {
       // Update the cache with the new guest from server
-      queryClient.setQueryData(['guests', userId], (old: Guest[] = []) => {
+      queryClient.setQueryData(['guests', effectiveId], (old: Guest[] = []) => {
         return [...old, newGuest];
       });
+      
+      // Send update to partner
+      emitUpdate('guests', 'add', { guest: newGuest });
     },
     onError: (err, _newGuest) => {
       console.error('❌ Failed to add guest:', err);
@@ -135,12 +143,12 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
   });
 
   const updateGuestMutation = useMutation({
-    mutationFn: (guest: Guest) => guestService.updateGuest(guest),
+    mutationFn: (guest: Guest) => guestService.updateGuest({ ...guest, userId: effectiveId }),
     onMutate: async (updatedGuest) => {
-      await queryClient.cancelQueries({ queryKey: ['guests', userId] });
-      const previousGuests = queryClient.getQueryData(['guests', userId]);
+      await queryClient.cancelQueries({ queryKey: ['guests', effectiveId] });
+      const previousGuests = queryClient.getQueryData(['guests', effectiveId]);
 
-      queryClient.setQueryData(['guests', userId], (old: Guest[] = []) => {
+      queryClient.setQueryData(['guests', effectiveId], (old: Guest[] = []) => {
         return old.map(guest => 
           guest._id === updatedGuest._id ? { ...updatedGuest, updatedAt: new Date() } : guest
         );
@@ -150,21 +158,24 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
     },
     onError: (err, updatedGuest, context) => {
       if (context?.previousGuests) {
-        queryClient.setQueryData(['guests', userId], context.previousGuests);
+        queryClient.setQueryData(['guests', effectiveId], context.previousGuests);
       }
     },
-    onSuccess: async () => {
+    onSuccess: async (updatedGuest) => {
       await invalidateGuestQueries();
+      
+      // Send update to partner
+      emitUpdate('guests', 'update', { guest: updatedGuest });
     },
   });
 
   const deleteGuestMutation = useMutation({
     mutationFn: (guestId: string) => guestService.deleteGuest(guestId),
     onMutate: async (guestId) => {
-      await queryClient.cancelQueries({ queryKey: ['guests', userId] });
-      const previousGuests = queryClient.getQueryData(['guests', userId]);
+      await queryClient.cancelQueries({ queryKey: ['guests', effectiveId] });
+      const previousGuests = queryClient.getQueryData(['guests', effectiveId]);
 
-      queryClient.setQueryData(['guests', userId], (old: Guest[] = []) => {
+      queryClient.setQueryData(['guests', effectiveId], (old: Guest[] = []) => {
         return old.filter(guest => guest._id !== guestId);
       });
 
@@ -172,11 +183,14 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
     },
     onError: (err, guestId, context) => {
       if (context?.previousGuests) {
-        queryClient.setQueryData(['guests', userId], context.previousGuests);
+        queryClient.setQueryData(['guests', effectiveId], context.previousGuests);
       }
     },
-    onSuccess: async () => {
+    onSuccess: async (_, guestId) => {
       await invalidateGuestQueries();
+      
+      // Send update to partner
+      emitUpdate('guests', 'delete', { guestId });
     },
   });
 
@@ -184,10 +198,10 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
     mutationFn: ({ guestId, status }: { guestId: string; status: boolean | null }) =>
       guestService.confirmGuest(guestId, status),
     onMutate: async ({ guestId, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['guests', userId] });
-      const previousGuests = queryClient.getQueryData(['guests', userId]);
+      await queryClient.cancelQueries({ queryKey: ['guests', effectiveId] });
+      const previousGuests = queryClient.getQueryData(['guests', effectiveId]);
 
-      queryClient.setQueryData(['guests', userId], (old: Guest[] = []) => {
+      queryClient.setQueryData(['guests', effectiveId], (old: Guest[] = []) => {
         return old.map(guest => 
           guest._id === guestId 
             ? { ...guest, isConfirmed: status, updatedAt: new Date() } 
@@ -199,25 +213,28 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
     },
     onError: (err, _variables, context) => {
       if (context?.previousGuests) {
-        queryClient.setQueryData(['guests', userId], context.previousGuests);
+        queryClient.setQueryData(['guests', effectiveId], context.previousGuests);
       }
     },
-    onSuccess: async () => {
+    onSuccess: async (updatedGuest, { guestId, status }) => {
       await invalidateGuestQueries();
+      
+      // Send update to partner
+      emitUpdate('guests', 'update', { guestId, status, guest: updatedGuest });
     },
   });
 
   const deleteAllGuestsMutation = useMutation({
-    mutationFn: () => guestService.deleteAllGuests(userId),
+    mutationFn: () => guestService.deleteAllGuests(effectiveId),
     onMutate: async () => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['guests', userId] });
+      await queryClient.cancelQueries({ queryKey: ['guests', effectiveId] });
       
       // Snapshot the previous value
-      const previousGuests = queryClient.getQueryData(['guests', userId]);
+      const previousGuests = queryClient.getQueryData(['guests', effectiveId]);
       
       // Optimistically clear the guests list
-      queryClient.setQueryData(['guests', userId], []);
+      queryClient.setQueryData(['guests', effectiveId], []);
       
       return { previousGuests };
     },
@@ -225,7 +242,7 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
       console.error('❌ Delete all guests failed:', error);
       // Rollback to previous data if available
       if (context?.previousGuests) {
-        queryClient.setQueryData(['guests', userId], context.previousGuests);
+        queryClient.setQueryData(['guests', effectiveId], context.previousGuests);
       }
     },
     onSuccess: async () => {
@@ -234,13 +251,13 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
   });
 
   const cleanupDuplicatesMutation = useMutation({
-    mutationFn: () => guestService.cleanupDuplicates(userId),
+    mutationFn: () => guestService.cleanupDuplicates(effectiveId),
     onMutate: async () => {
       // Cancel any outgoing refetches
-      await queryClient.cancelQueries({ queryKey: ['guests', userId] });
+      await queryClient.cancelQueries({ queryKey: ['guests', effectiveId] });
       
       // Snapshot the previous value
-      const previousGuests = queryClient.getQueryData(['guests', userId]);
+      const previousGuests = queryClient.getQueryData(['guests', effectiveId]);
       
       return { previousGuests };
     },
@@ -248,7 +265,7 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
       console.error('❌ Cleanup duplicates failed:', error);
       // Rollback to previous data if available
       if (context?.previousGuests) {
-        queryClient.setQueryData(['guests', userId], context.previousGuests);
+        queryClient.setQueryData(['guests', effectiveId], context.previousGuests);
       }
     },
     onSuccess: async () => {
@@ -258,14 +275,14 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
 
   const importGuestsMutation = useMutation({
     mutationFn: ({ file, onProgress }: { file: File, onProgress?: (current: number, total: number, currentName: string) => void }) => 
-      guestService.importGuests(file, userId, user?.sharedEventId, onProgress),
+      guestService.importGuests(file, effectiveId, user?.sharedEventId, onProgress),
     onSuccess: async (result, _variables, _context) => {
       console.log('📊 Import completed:', result);
       
       // Immediately update the cache with the new data
       try {
-        const freshData = await guestService.fetchGuests(userId);
-        queryClient.setQueryData(['guests', userId], freshData);
+        const freshData = await guestService.fetchGuests(effectiveId);
+        queryClient.setQueryData(['guests', effectiveId], freshData);
         console.log('✅ Cache updated with fresh data');
       } catch (error) {
         console.error('❌ Failed to update cache:', error);

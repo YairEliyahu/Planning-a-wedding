@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
 export interface User {
@@ -118,7 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
   }, []);
 
-  const login = async (token: string, userData: User) => {
+  const login = useCallback(async (token: string, userData: User) => {
     try {
       console.time('user-login');
       console.log('Logging in user:', userData._id);
@@ -128,15 +128,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         Promise.resolve(localStorage.setItem('user', JSON.stringify(userData)))
       ]);
       
-      setUser(userData);
+      // אם המשתמש יש isProfileComplete: true, נעדכן את זה במסד הנתונים
+      if (userData.isProfileComplete) {
+        try {
+          const updateResponse = await fetch(`/api/user/${userData._id}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              isProfileComplete: true
+            })
+          });
+          
+          if (updateResponse.ok) {
+            const updatedData = await updateResponse.json();
+            console.log('User profile completion status updated:', updatedData.user.isProfileComplete);
+            // עדכון המשתמש עם הנתונים המעודכנים
+            setUser(updatedData.user);
+            localStorage.setItem('user', JSON.stringify(updatedData.user));
+          } else {
+            // אם העדכון נכשל, עדיין נשמור את המשתמש המקורי
+            setUser(userData);
+            console.log('Failed to update profile completion status, using original user data');
+          }
+        } catch (error) {
+          console.error('Failed to update user profile completion status:', error);
+          // אם יש שגיאה, עדיין נשמור את המשתמש המקורי
+          setUser(userData);
+        }
+      } else {
+        // אם אין isProfileComplete, נשמור את המשתמש כמו שהוא
+        setUser(userData);
+      }
+      
       console.timeEnd('user-login');
     } catch (error) {
       console.error('Error during login:', error);
       throw error;
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       console.log('Logging out user');
       localStorage.removeItem('token');
@@ -147,14 +181,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       console.error('Error during logout:', error);
       throw error;
     }
-  };
+  }, [router]);
 
-  const contextValue = useMemo(() => ({
-    user,
-    isAuthReady,
-    login,
-    logout
-  }), [user, isAuthReady, router]);
+  const contextValue = useMemo(() => {
+    return {
+      user,
+      isAuthReady,
+      login,
+      logout
+    };
+  }, [user, isAuthReady, login, logout]);
 
   return (
     <AuthContext.Provider value={contextValue}>

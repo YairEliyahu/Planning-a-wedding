@@ -2,8 +2,10 @@
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSync } from '@/contexts/SyncContext';
 import { UserProfile, ProfileFormData, InviteStatus } from '../types/profile';
 import profileService from '../services/profileService';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface EditProfileContextType {
   // Query data
@@ -68,6 +70,11 @@ const createInitialFormData = (): ProfileFormData => ({
 
 export function EditProfileProvider({ children, userId }: EditProfileProviderProps) {
   const queryClient = useQueryClient();
+  const { emitUpdate } = useSync();
+  const { user } = useAuth();
+  
+  // Use sharedEventId if exists, otherwise fallback to userId
+  const effectiveId = user?.sharedEventId || userId;
   
   // Local state
   const [formData, setFormData] = useState<ProfileFormData>(createInitialFormData);
@@ -83,9 +90,9 @@ export function EditProfileProvider({ children, userId }: EditProfileProviderPro
     error: profileError,
     refetch: refetchProfile,
   } = useQuery({
-    queryKey: ['userProfile', userId],
-    queryFn: () => profileService.fetchUserProfile(userId),
-    enabled: !!userId,
+    queryKey: ['userProfile', effectiveId],
+    queryFn: () => profileService.fetchUserProfile(effectiveId),
+    enabled: !!effectiveId,
   });
 
   // Handle profile data changes
@@ -110,10 +117,16 @@ export function EditProfileProvider({ children, userId }: EditProfileProviderPro
 
   // Mutation for updating profile
   const updateProfileMutation = useMutation({
-    mutationFn: (data: ProfileFormData) => profileService.updateUserProfile(userId, data),
+    mutationFn: (data: ProfileFormData) => profileService.updateUserProfile(effectiveId, data),
     onSuccess: (updatedProfile: UserProfile) => {
       // Update cache
-      queryClient.setQueryData(['userProfile', userId], updatedProfile);
+      queryClient.setQueryData(['userProfile', effectiveId], updatedProfile);
+      
+      // Send update to partner
+      emitUpdate('preferences', 'update', { 
+        profile: updatedProfile 
+      });
+      
       setSuccessMessage('הפרופיל עודכן בהצלחה!');
       
       // Clear success message after 3 seconds
@@ -127,7 +140,7 @@ export function EditProfileProvider({ children, userId }: EditProfileProviderPro
   // Mutation for inviting partner
   const invitePartnerMutation = useMutation({
     mutationFn: () => profileService.invitePartner({
-      userId,
+      userId: effectiveId,
       partnerEmail: formData.partnerEmail,
     }),
     onMutate: () => {

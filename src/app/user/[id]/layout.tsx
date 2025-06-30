@@ -3,9 +3,12 @@
 import { ReactNode } from 'react';
 import { motion } from 'framer-motion';
 import NavbarProfile from '@/components/NavbarProfile';
+import { SyncProvider } from '@/contexts/SyncContext';
+import { SyncIndicator } from '@/components/SyncIndicator';
 
 interface ProfileLayoutProps {
   children: ReactNode;
+  params: { id: string };
 }
 
 const pageVariants = {
@@ -32,17 +35,20 @@ const pageVariants = {
   }
 };
 
-export default function ProfileLayout({ children }: ProfileLayoutProps) {
+export default function ProfileLayout({ children, params }: ProfileLayoutProps) {
   return (
-    <motion.div
-      initial="initial"
-      animate="animate"
-      exit="exit"
-      variants={pageVariants}
-      className="min-h-screen"
-    >
-      <NavbarProfile />
-      {children}
-    </motion.div>
+    <SyncProvider userId={params.id}>
+      <motion.div
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        variants={pageVariants}
+        className="min-h-screen"
+      >
+        <NavbarProfile />
+        {children}
+        <SyncIndicator />
+      </motion.div>
+    </SyncProvider>
   );
 } 

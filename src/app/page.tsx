@@ -227,14 +227,52 @@ export default function HomePage() {
         const userJson = searchParams?.get('user');
         
         if (token && userJson) {
+          console.log('Found token and user in URL params');
           const userData = JSON.parse(userJson);
           await login(token, userData);
+          
+          // בדיקה אם יש טוקן הזמנה שצריך לקבל
+          const invitationToken = localStorage.getItem('invitation_token');
+          if (invitationToken) {
+            console.log('Found invitation token, accepting invitation...');
+            try {
+              // קבלת ההזמנה
+              const acceptResponse = await fetch('/api/accept-invitation', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ token: invitationToken, userId: userData._id }),
+              });
+
+              if (acceptResponse.ok) {
+                console.log('Invitation accepted successfully');
+                const acceptData = await acceptResponse.json();
+                
+                // עדכון המשתמש עם הנתונים המעודכנים
+                if (acceptData.user) {
+                  console.log('Updating user with accepted invitation data:', acceptData.user.isProfileComplete);
+                  await login(token, acceptData.user);
+                }
+                
+                // ניקוי טוקן ההזמנה
+                localStorage.removeItem('invitation_token');
+              } else {
+                console.error('Failed to accept invitation');
+              }
+            } catch (error) {
+              console.error('Error accepting invitation:', error);
+            }
+          }
           
           // ניקוי פרמטרים מה-URL
           const newUrl = new URL(window.location.href);
           newUrl.searchParams.delete('token');
           newUrl.searchParams.delete('user');
           window.history.replaceState({}, '', newUrl.toString());
+          console.log('URL params cleaned');
+        } else {
+          console.log('No token or user in URL params');
         }
       } catch (error) {
         console.error('Error processing user data:', error);

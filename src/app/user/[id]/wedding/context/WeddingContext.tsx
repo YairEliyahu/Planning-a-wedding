@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSync } from '@/contexts/SyncContext';
 import { 
   useWeddingData, 
   useSaveWeddingData, 
@@ -23,6 +24,7 @@ const WeddingContext = createContext<WeddingContextValue | undefined>(undefined)
 
 export function WeddingProvider({ children, userId }: WeddingProviderProps) {
   const { user, isAuthReady } = useAuth();
+  const { emitUpdate } = useSync();
   const router = useRouter();
   const [localPreferences, setLocalPreferences] = useState<WeddingPreferences>({
     venueType: '',
@@ -32,23 +34,26 @@ export function WeddingProvider({ children, userId }: WeddingProviderProps) {
   });
   const [localError, setLocalError] = useState('');
 
+  // Use sharedEventId if exists, otherwise fallback to userId
+  const effectiveId = user?.sharedEventId || userId;
+
   // React Query hooks
   const { 
     data: weddingData, 
     isLoading: isLoadingData, 
     error: dataError 
-  } = useWeddingData(userId);
+  } = useWeddingData(effectiveId);
 
   const { 
     mutate: saveWeddingData, 
     isPending: isSaving 
-  } = useSaveWeddingData(userId);
+  } = useSaveWeddingData(effectiveId);
 
   const { refreshWeddingData } = useRefreshWeddingData();
 
   // Auto-refresh for connected users
   const isConnectedUser = !!(user?.connectedUserId);
-  useAutoRefreshWeddingData(userId, isConnectedUser);
+  useAutoRefreshWeddingData(effectiveId, isConnectedUser);
 
   // Auth check effect
   React.useEffect(() => {
@@ -66,15 +71,15 @@ export function WeddingProvider({ children, userId }: WeddingProviderProps) {
         return;
       }
 
-      if (user._id !== userId) {
-        console.log('User ID mismatch:', { userId: user._id, paramsId: userId });
+      if (user._id !== effectiveId) {
+        console.log('User ID mismatch:', { effectiveId: user._id, paramsId: effectiveId });
         router.push(`/user/${user._id}/wedding`);
         return;
       }
     };
 
     checkAuth();
-  }, [isAuthReady, user, userId, router]);
+  }, [isAuthReady, user, effectiveId, router]);
 
   // Update local preferences when data is loaded
   React.useEffect(() => {
@@ -112,8 +117,14 @@ export function WeddingProvider({ children, userId }: WeddingProviderProps) {
       
       return new Promise<void>((resolve, reject) => {
         saveWeddingData(localPreferences, {
-          onSuccess: () => {
+          onSuccess: (savedData) => {
             console.log('Wedding preferences saved successfully');
+            
+            // Send update to partner
+            emitUpdate('preferences', 'update', { 
+              preferences: savedData || localPreferences 
+            });
+            
             resolve();
           },
           onError: (error) => {
@@ -128,18 +139,18 @@ export function WeddingProvider({ children, userId }: WeddingProviderProps) {
       setLocalError('שגיאה בשמירת העדפות החתונה');
       throw error;
     }
-  }, [localPreferences, saveWeddingData]);
+  }, [localPreferences, saveWeddingData, emitUpdate]);
 
   const refreshData = useCallback(async () => {
     try {
       setLocalError('');
-      await refreshWeddingData(userId);
+      await refreshWeddingData(effectiveId);
     } catch (error) {
       console.error('Failed to refresh data:', error);
       setLocalError('אירעה שגיאה בעת רענון הנתונים');
       throw error;
     }
-  }, [refreshWeddingData, userId]);
+  }, [refreshWeddingData, effectiveId]);
 
   const clearError = useCallback(() => {
     setLocalError('');

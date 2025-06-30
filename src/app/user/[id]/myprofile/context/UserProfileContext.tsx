@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useSync } from '@/contexts/SyncContext';
 import { userProfileService } from '../services/UserProfileService';
 import { 
   UserProfile, 
@@ -11,6 +12,7 @@ import {
   BudgetAnalysis,
   ChecklistCategory 
 } from '../types/profileTypes';
+import { useAuth } from '@/contexts/AuthContext';
 
 const UserProfileContext = createContext<UserProfileContextType | undefined>(undefined);
 
@@ -21,6 +23,8 @@ interface UserProfileProviderProps {
 
 export function UserProfileProvider({ children, userId }: UserProfileProviderProps) {
   const queryClient = useQueryClient();
+  const { emitUpdate } = useSync();
+  const { user } = useAuth();
   const [timeLeft, setTimeLeft] = useState<TimeLeft>({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [walletInfo, setWalletInfo] = useState<WalletInfo>({
     totalBudget: 0,
@@ -34,6 +38,9 @@ export function UserProfileProvider({ children, userId }: UserProfileProviderPro
     categories: []
   });
 
+  // Use sharedEventId if exists, otherwise fallback to userId
+  const effectiveId = user?.sharedEventId || userId;
+
   // React Query for user profile
   const {
     data: profileData,
@@ -41,9 +48,9 @@ export function UserProfileProvider({ children, userId }: UserProfileProviderPro
     error: profileError,
     refetch: refetchProfile,
   } = useQuery({
-    queryKey: ['userProfile', userId],
-    queryFn: () => userProfileService.fetchUserProfile(userId),
-    enabled: !!userId,
+    queryKey: ['userProfile', effectiveId],
+    queryFn: () => userProfileService.fetchUserProfile(effectiveId),
+    enabled: !!effectiveId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -54,9 +61,9 @@ export function UserProfileProvider({ children, userId }: UserProfileProviderPro
     error: checklistError,
     refetch: refetchChecklist,
   } = useQuery({
-    queryKey: ['weddingChecklist', userId],
-    queryFn: () => userProfileService.fetchWeddingChecklist(userId),
-    enabled: !!userId,
+    queryKey: ['weddingChecklist', effectiveId],
+    queryFn: () => userProfileService.fetchWeddingChecklist(effectiveId),
+    enabled: !!effectiveId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
@@ -65,18 +72,23 @@ export function UserProfileProvider({ children, userId }: UserProfileProviderPro
     isLoading: isPreferencesLoading,
     error: preferencesError,
   } = useQuery({
-    queryKey: ['weddingPreferences', userId],
-    queryFn: () => userProfileService.fetchWeddingPreferences(userId),
-    enabled: !!userId,
+    queryKey: ['weddingPreferences', effectiveId],
+    queryFn: () => userProfileService.fetchWeddingPreferences(effectiveId),
+    enabled: !!effectiveId,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
 
   // Mutation for updating profile
   const updateProfileMutation = useMutation({
     mutationFn: (data: Partial<UserProfile>) => 
-      userProfileService.updateUserProfile(userId, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['userProfile', userId] });
+      userProfileService.updateUserProfile(effectiveId, data),
+    onSuccess: (updatedProfile) => {
+      queryClient.invalidateQueries({ queryKey: ['userProfile', effectiveId] });
+      
+      // Send update to partner
+      emitUpdate('preferences', 'update', { 
+        profile: updatedProfile 
+      });
     },
   });
 
@@ -125,7 +137,7 @@ export function UserProfileProvider({ children, userId }: UserProfileProviderPro
   const refetchAll = () => {
     refetchProfile();
     refetchChecklist();
-    queryClient.invalidateQueries({ queryKey: ['weddingPreferences', userId] });
+    queryClient.invalidateQueries({ queryKey: ['weddingPreferences', effectiveId] });
   };
 
   // Update profile function

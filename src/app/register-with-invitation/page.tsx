@@ -187,6 +187,7 @@ export default function RegisterWithInvitation() {
           email: invitationData?.partnerEmail,
           password: formData.password,
           phone: formData.phone,
+          isProfileComplete: true,
           ...inviterData // Include inviter data if available
         })
       });
@@ -211,7 +212,9 @@ export default function RegisterWithInvitation() {
       // Success - redirect to accept invitation
       setStatus('success');
       setTimeout(() => {
-        router.push('/accept-invitation');
+        // במקום לעבור ל-accept-invitation, נעבור ישירות לדף הבית עם הפרמטרים
+        const userParam = encodeURIComponent(JSON.stringify(registerData.user));
+        router.push(`/?token=${registerData.token}&user=${userParam}`);
       }, 2000);
 
     } catch (error) {

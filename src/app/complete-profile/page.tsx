@@ -132,6 +132,7 @@ export default function CompleteProfile() {
     locationPreference: ''
   });
   const [isLoading, setIsLoading] = useState(false);
+  const [isProfileBuilding, setIsProfileBuilding] = useState(false);
   const [error, setError] = useState('');
   const [inviteStatus, setInviteStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
   const [inviteMessage, setInviteMessage] = useState('');
@@ -203,6 +204,7 @@ export default function CompleteProfile() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setIsProfileBuilding(true);
     setError('');
 
     try {
@@ -242,6 +244,7 @@ export default function CompleteProfile() {
       setError(error instanceof Error ? error.message : 'שגיאה בעדכון פרופיל');
     } finally {
       setIsLoading(false);
+      setIsProfileBuilding(false);
     }
   };
 
@@ -316,7 +319,7 @@ export default function CompleteProfile() {
   if (isInitializing || isLoading) {
     return (
       <LoadingSpinner 
-        text="טוען..." 
+        text={isProfileBuilding ? 'בניית פרופיל...' : 'טוען...'} 
         size="large"
         fullScreen={true}
         color="pink"
@@ -699,7 +702,7 @@ export default function CompleteProfile() {
                     </Button>
                   ) : (
                     <Button type="submit" disabled={isLoading} className="mr-auto">
-                      {isLoading ? 'מעדכן...' : 'סיום והמשך'}
+                      {isLoading ? (isProfileBuilding ? 'בונה פרופיל...' : 'מעדכן...') : 'סיום והמשך'}
                     </Button>
                   )}
                 </div>
