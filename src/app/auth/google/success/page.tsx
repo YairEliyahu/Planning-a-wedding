@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
-export default function GoogleAuthSuccess() {
+function GoogleSuccessContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login } = useAuth();
@@ -56,5 +56,13 @@ export default function GoogleAuthSuccess() {
       <div className="spinner" />
       <h2 className="text-xl font-semibold">מעבד את ההתחברות...</h2>
     </div>
+  );
+}
+
+export default function GoogleSuccessPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <GoogleSuccessContent />
+    </Suspense>
   );
 } 

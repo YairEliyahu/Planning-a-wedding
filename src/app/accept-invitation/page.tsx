@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-export default function AcceptInvitation() {
+function AcceptInvitationContent() {
   const [status, setStatus] = useState<'loading' | 'invalid' | 'success' | 'error' | 'redirecting'>('loading');
   const [message, setMessage] = useState('מאמת את ההזמנה...');
   const [inviterName, setInviterName] = useState('');
@@ -245,5 +245,13 @@ export default function AcceptInvitation() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AcceptInvitation() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AcceptInvitationContent />
+    </Suspense>
   );
 } 

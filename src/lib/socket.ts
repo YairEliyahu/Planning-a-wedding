@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import { socketFallbackManager } from './socket-fallback';
 
 export interface SyncEvent {
   type: 'guests' | 'checklist' | 'seating' | 'preferences';
@@ -9,6 +10,16 @@ export interface SyncEvent {
   timestamp: number;
 }
 
+// Helper to detect if Socket.io is available
+const isSocketIoAvailable = () => {
+  // בסביבת production על Vercel, נשתמש ב-fallback
+  if (typeof window !== 'undefined' && window.location.hostname.includes('vercel.app')) {
+    return false;
+  }
+  // בסביבת development, נבדוק אם השרת רץ
+  return process.env.NEXT_PUBLIC_SOCKET_URL !== undefined || process.env.NODE_ENV === 'development';
+};
+
 class SocketManager {
   private socket: Socket | null = null;
   private userId: string | null = null;
@@ -17,8 +28,18 @@ class SocketManager {
   private reconnectAttempts: number = 0;
   private maxReconnectAttempts: number = 5;
   private reconnectDelay: number = 1000;
+  private usingFallback: boolean = false;
 
   connect(userId: string, sharedEventId?: string) {
+    // בדוק אם Socket.io זמין
+    if (!isSocketIoAvailable()) {
+      console.log('🔌 Using fallback sync mode for Vercel deployment');
+      this.usingFallback = true;
+      socketFallbackManager.connect(userId, sharedEventId);
+      this.isConnected = true;
+      return;
+    }
+
     if (this.socket?.connected) {
       console.log('🔌 Socket already connected');
       return;
@@ -97,6 +118,11 @@ class SocketManager {
   }
 
   emit(event: string, data: SyncEvent) {
+    if (this.usingFallback) {
+      socketFallbackManager.emit(event, data);
+      return;
+    }
+
     if (this.socket && this.isConnected) {
       const eventData = {
         ...data,
@@ -113,6 +139,11 @@ class SocketManager {
   }
 
   on(event: string, callback: (data: SyncEvent) => void) {
+    if (this.usingFallback) {
+      socketFallbackManager.on(event, callback);
+      return;
+    }
+
     if (this.socket) {
       this.socket.on(event, (data: SyncEvent) => {
         console.log(`📥 Received ${event}:`, data);
@@ -122,6 +153,11 @@ class SocketManager {
   }
 
   off(event: string, callback?: (data: SyncEvent) => void) {
+    if (this.usingFallback) {
+      socketFallbackManager.off(event, callback);
+      return;
+    }
+
     if (this.socket) {
       if (callback) {
         this.socket.off(event, callback);
@@ -132,10 +168,20 @@ class SocketManager {
   }
 
   getConnectionStatus(): boolean {
+    if (this.usingFallback) {
+      return socketFallbackManager.getConnectionStatus();
+    }
     return this.isConnected;
   }
 
   disconnect() {
+    if (this.usingFallback) {
+      socketFallbackManager.disconnect();
+      this.usingFallback = false;
+      this.isConnected = false;
+      return;
+    }
+
     if (this.socket) {
       console.log('🔌 Disconnecting socket');
       this.socket.disconnect();

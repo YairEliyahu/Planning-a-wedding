@@ -24,7 +24,6 @@ export function SyncProvider({ children, userId }: SyncProviderProps) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [isConnected, setIsConnected] = useState(false);
-  const [lastSync, setLastSync] = useState<Date | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'disconnected' | 'connecting' | 'error'>('disconnected');
   const lastSyncRef = useRef<Date | null>(null);
 
@@ -46,7 +45,6 @@ export function SyncProvider({ children, userId }: SyncProviderProps) {
   const handlePartnerUpdate = useCallback((event: SyncEvent) => {
     console.log('🔄 Handling partner update:', event);
     lastSyncRef.current = new Date();
-    setLastSync(new Date());
 
     // Use sharedEventId if exists, otherwise fallback to userId
     const effectiveId = user?.sharedEventId || userId;

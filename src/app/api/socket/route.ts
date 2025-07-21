@@ -5,13 +5,13 @@ import { SyncEvent } from '@/lib/socket';
 // Store active connections
 const activeConnections = new Map<string, { userId: string; sharedEventId?: string }>();
 
-export async function GET(req: NextRequest) {
+export async function GET(_req: NextRequest) {
   // This is a placeholder for the WebSocket upgrade
   // The actual WebSocket handling will be done in the Socket.IO server
   return new Response('WebSocket endpoint', { status: 200 });
 }
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   // This is a placeholder for the WebSocket upgrade
   // The actual WebSocket handling will be done in the Socket.IO server
   return new Response('WebSocket endpoint', { status: 200 });
@@ -20,8 +20,10 @@ export async function POST(req: NextRequest) {
 // Initialize Socket.IO server
 let io: SocketIOServer;
 
-if (!(global as any).io) {
-  io = new SocketIOServer(3001, {
+if (!(global as any).io && process.env.NODE_ENV !== 'production') {
+  try {
+    const port = parseInt(process.env.SOCKET_PORT || '3001');
+    io = new SocketIOServer(port, {
     cors: {
       origin: process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
       methods: ['GET', 'POST']
@@ -80,7 +82,8 @@ if (!(global as any).io) {
     });
   });
 
-  console.log('🚀 Socket.IO server initialized on port 3001');
-}
-
-export { io }; 
+    console.log(`🚀 Socket.IO server initialized on port ${process.env.SOCKET_PORT || '3001'}`);
+  } catch (error) {
+    console.error('❌ Failed to initialize Socket.IO server:', error);
+  }
+} 
