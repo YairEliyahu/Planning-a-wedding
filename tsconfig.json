@@ -40,5 +40,5 @@
     "__tests__/**/*.ts",
     "__tests__/**/*.tsx"
   ],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "cypress.config.ts", "cypress/**/*"]
 }

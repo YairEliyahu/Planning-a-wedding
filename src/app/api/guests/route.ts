@@ -147,22 +147,10 @@ export async function GET(req: NextRequest) {
       
       // אופטימיזציה של שאילתת האורחים המשותפים
       const query = { sharedEventId: user.sharedEventId };
-      const guestsProjection = {
-        name: 1,
-        phoneNumber: 1,
-        numberOfGuests: 1,
-        side: 1,
-        isConfirmed: 1,
-        notes: 1,
-        group: 1,
-        userId: 1,
-        sharedEventId: 1,
-        updatedAt: 1,
-        createdAt: 1
-      };
       
       try {
-        const sharedGuests = await Guest.find(query, guestsProjection)
+        const sharedGuests = await Guest.find(query)
+          .select('name phoneNumber numberOfGuests side isConfirmed notes group userId sharedEventId updatedAt createdAt')
           .lean()
           .sort({ updatedAt: -1, name: 1 })
           .hint({ sharedEventId: 1, updatedAt: -1 }); // רמז לאינדקס
