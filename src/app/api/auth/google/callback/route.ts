@@ -26,6 +26,8 @@ async function getUserInfo(accessToken: string) {
   return response.json();
 }
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   console.time('google-auth-callback');
   try {

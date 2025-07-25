@@ -143,7 +143,7 @@ export function GuestProvider({ children, userId }: GuestProviderProps) {
   });
 
   const updateGuestMutation = useMutation({
-    mutationFn: (guest: Guest) => guestService.updateGuest({ ...guest, userId: effectiveId }),
+    mutationFn: (guest: Guest) => guestService.updateGuest(guest),
     onMutate: async (updatedGuest) => {
       await queryClient.cancelQueries({ queryKey: ['guests', effectiveId] });
       const previousGuests = queryClient.getQueryData(['guests', effectiveId]);

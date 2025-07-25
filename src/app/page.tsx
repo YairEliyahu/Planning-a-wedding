@@ -3,13 +3,13 @@ import './globals.css';
 import Link from 'next/link';
 import Navbar from '../components/Navbar';
 import Image from 'next/image';
-import { useEffect, useState, useRef, FormEvent, useCallback, useMemo } from 'react';
+import { useEffect, useState, useRef, FormEvent, useCallback, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { motion } from 'framer-motion';
 // Removed unused imports
 
-export default function HomePage() {
+function HomePageContent() {
   const { login, user } = useAuth();
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(true);
@@ -989,5 +989,13 @@ export default function HomePage() {
         ` 
       }} />
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <HomePageContent />
+    </Suspense>
   );
 }

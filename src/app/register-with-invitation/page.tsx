@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ interface InvitationData {
   partnerPhone?: string;
 }
 
-export default function RegisterWithInvitation() {
+function RegisterWithInvitationContent() {
   const [status, setStatus] = useState<'loading' | 'error' | 'ready' | 'registering' | 'success'>('loading');
   const [message, setMessage] = useState('טוען את פרטי ההזמנה...');
   const [invitationData, setInvitationData] = useState<InvitationData | null>(null);
@@ -368,5 +368,13 @@ export default function RegisterWithInvitation() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function RegisterWithInvitationPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <RegisterWithInvitationContent />
+    </Suspense>
   );
 } 
