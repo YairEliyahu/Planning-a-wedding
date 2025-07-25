@@ -20,10 +20,10 @@
 ### משתני חובה:
 ```bash
 # MongoDB Atlas
-MONGODB_URI=mongodb+srv://your-connection-string
+MONGODB_URI=mongodb+srv://yaireliyahu2013:Yairel10@wedding-planner-cluster.y6qvx.mongodb.net/?retryWrites=true&w=majority&appName=WeddingApp
 
 # JWT Security (צור מחרוזת חזקה)
-JWT_SECRET=your-very-secure-jwt-secret-minimum-32-characters
+JWT_SECRET=X9k#mP2$vL7@nQ4&hR5*fD8^tG3!wS6%yU9(cB4)mN1_pE7+aJ2=zK5
 
 # App URLs (תחליף your-app-name)
 NEXTAUTH_URL=https://your-app-name.vercel.app
@@ -32,16 +32,16 @@ NEXT_PUBLIC_APP_URL=https://your-app-name.vercel.app
 
 ### Google OAuth (אם משתמש):
 ```bash
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-GOOGLE_REDIRECT_URI=https://your-app-name.vercel.app/api/auth/google/callback
+GOOGLE_CLIENT_ID=248820218512-41h80qg7nalcijc5hvh4kjpa0r3gieul.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=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
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
 ```
 
 ### Email Service:
 ```bash
 EMAIL_HOST=smtp.gmail.com
-EMAIL_USER=your-email@gmail.com
-EMAIL_PASSWORD=your-app-password
+EMAIL_USER=yaireliyahu2013@gmail.com
+EMAIL_PASSWORD=rlbqcpfyftrxivsn
 ```
 
 ### ייצור:
