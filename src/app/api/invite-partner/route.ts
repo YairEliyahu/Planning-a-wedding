@@ -74,8 +74,37 @@ export async function POST(request: Request) {
       { expiresIn: '7d' }
     );
 
-    // שליחת האימייל
-    const invitationLink = `${process.env.NEXTAUTH_URL}/register-with-invitation?token=${invitationToken}`;
+    // בניית URL עם fallback חכם
+    const getBaseUrl = () => {
+      // אם יש NEXTAUTH_URL מוגדר ולא undefined, השתמש בו
+      if (process.env.NEXTAUTH_URL && process.env.NEXTAUTH_URL !== 'undefined') {
+        return process.env.NEXTAUTH_URL;
+      }
+      
+      // אם יש NEXT_PUBLIC_APP_URL מוגדר ולא undefined, השתמש בו
+      if (process.env.NEXT_PUBLIC_APP_URL && process.env.NEXT_PUBLIC_APP_URL !== 'undefined') {
+        return process.env.NEXT_PUBLIC_APP_URL;
+      }
+      
+      // fallback לבניית URL מה-headers של הבקשה
+      try {
+        const url = new URL(request.url);
+        const protocol = url.protocol;
+        const host = request.headers.get('host');
+        return `${protocol}//${host}`;
+      } catch (error) {
+        console.warn('Failed to build URL from request headers, using fallback');
+        // fallback אחרון - הדומיין הידוע
+        return 'https://planning-a-wedding.vercel.app';
+      }
+    };
+
+    const baseUrl = getBaseUrl();
+    const invitationLink = `${baseUrl}/register-with-invitation?token=${invitationToken}`;
+
+    // לוג לדיבוג (יוסר בפרודקשן)
+    console.log('Base URL used for invitation:', baseUrl);
+    console.log('Full invitation link:', invitationLink);
 
     const mailOptions = {
       from: process.env.EMAIL_USER,
