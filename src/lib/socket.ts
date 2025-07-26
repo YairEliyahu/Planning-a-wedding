@@ -1,4 +1,4 @@
-import { io, Socket } from 'socket.io-client';
+import io, { Socket } from 'socket.io-client';
 import { socketFallbackManager } from './socket-fallback';
 
 export interface SyncEvent {
