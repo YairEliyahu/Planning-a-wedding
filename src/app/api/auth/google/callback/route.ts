@@ -38,11 +38,15 @@ export async function GET(request: Request) {
       return NextResponse.redirect(new URL('/login?error=NoCode', request.url));
     }
 
+    // בנייה דינמית של redirect URI מה-request URL
+    const requestUrl = new URL(request.url);
+    const redirectUri = `${requestUrl.protocol}//${requestUrl.host}/api/auth/google/callback`;
+    
     // שימוש ב-OAuth2Client במקום google.auth.OAuth2
     const oauth2Client = new OAuth2Client(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI
+      redirectUri
     );
 
     // קבלת tokens + חיבור DB במקביל

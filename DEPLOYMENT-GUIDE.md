@@ -34,8 +34,15 @@ NEXT_PUBLIC_APP_URL=https://your-app-name.vercel.app
 ```bash
 GOOGLE_CLIENT_ID=248820218512-41h80qg7nalcijc5hvh4kjpa0r3gieul.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=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
-GOOGLE_REDIRECT_URI=http://localhost:3000/api/auth/google/callback
+# הערה: GOOGLE_REDIRECT_URI נבנה דינמית מה-request URL - לא צריך להגדיר
 ```
+
+**הגדרת Google Cloud Console:**
+1. כנס ל-[Google Cloud Console](https://console.cloud.google.com/)
+2. בחר את הפרויקט → APIs & Services → Credentials  
+3. במקטע "Authorized redirect URIs" הוסף:
+   - `http://localhost:3000/api/auth/google/callback` (לפיתוח מקומי)
+   - `https://planning-a-wedding.vercel.app/api/auth/google/callback` (לפרודקשן)
 
 ### Email Service:
 ```bash
