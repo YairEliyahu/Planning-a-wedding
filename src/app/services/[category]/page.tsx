@@ -108,7 +108,6 @@ const dummyVendors = {
     { id: 30, name: 'החצר האחורית', location: 'מושב אורה', area: 'ירושלים', price: '₪₪₪', image: '/images/venues/ahazerAahorit.jpg', imageSource: 'אתר המקום', website: 'https://www.thebackyard.co.il/' },
   ],
   photographers: [
-<<<<<<< HEAD
     { id: 1, name: 'סלקט מגנטים', location: 'ארצי', area: 'ארצי', price: '₪₪₪', image: '/images/photographers/select.png', website: 'https://smagnetim.co.il/',phone: '050-1234567',averagePrice: '₪8,000',popularity: '⭐⭐⭐⭐⭐',availability: 'זמין ל-2024'},
     { id: 2, name: 'מגנטלי', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/photographers/magnetli.png', website: 'https://magnetli.co.il/',phone: '050-2345678',averagePrice: '₪10,000',popularity: '⭐⭐⭐⭐',availability: 'זמין ל-2024'},
     { id: 3, name: 'דוקטור מגנט', location: 'אזור הצפון', area: 'צפון', price: '₪₪', image: '/images/photographers/doctor.jpg', website: 'https://drmagnet.co.il/',phone: '050-3456789',averagePrice: '₪6,000',popularity: '⭐⭐⭐',availability: 'זמין ל-2024'},
@@ -157,41 +156,7 @@ const dummyVendors = {
     { id: 12, name: 'דז\'ה וו – מוזיקה ותופים (שי משולם)', location: 'אשדוד', area: 'דרום', price: '₪₪₪₪', image: '/images/music/deja.jpg',  instagram: '' },
     { id: 13, name: 'DJ דני די', location: 'באר שבע', area: 'דרום', price: '₪₪₪', image: '/images/music/danidi.jpg',  instagram: 'https://www.instagram.com/djdannydmusic' },
     { id: 14, name: 'שלומי מוסיקה והפקת אירועים', location: 'באר שבע', area: 'דרום', price: '₪₪₪₪', image: '/images/music/shlomi.jpg',  instagram: '' },
-    { id: 15, name: 'שמח תשמח תקליטן דתי', location: 'קריית מלאכי', area: 'דרום', price: '₪₪₪₪', image: '/images/music/sameach.jpg',  instagram: '' }
-=======
-    { id: 1, name: ' פוטו יחיאל', location: 'באר שבע', area: 'דרום', price: '₪₪₪', image: '/images/photographers/yehiel.webp' },
-    { id: 2, name: 'יובל אטיאס', location: 'באר שבע', area: 'דרום', price: '₪₪₪₪', image: '/images/photographers/yuval.webp' },
-    { id: 3, name: 'ישראל זוהרי', location: 'באר שבע', area: 'דרום', price: '₪₪', image: '/images/photographers/israel.webp' },
-    { id: 4, name: 'סנאפ ', location: 'באר שבע', area: 'דרום', price: '₪₪₪', image: '/images/photographers/snep.webp' },
-    { id: 5, name: 'אספוסה', location: 'ראשון לציון', area: 'מרכז', price: '₪₪₪₪', image: '/images/photographers/asposa.webp' },
-    { id: 6, name: 'kobi ', location: 'תל אביב', area: 'מרכז', price: '₪₪', image: '/images/photographers/kobi.jpg' },
-    { id: 7, name: ' parsi', location: 'ראשון לציון', area: 'מרכז', price: '₪₪', image: '/images/photographers/parsi.webp' },
-    { id: 8, name: 'מור לוי', location: 'חיפה', area: 'צפון', price: '₪₪₪₪', image: '/images/photographers/mor.webp' },
-    { id: 9, name: 'נדב רותם ', location: 'כרמיאל', area: 'צפון', price: '₪₪', image: '/images/photographers/nadav.webp' },
-    { id: 10, name: ' כתום צלמים', location: 'חיפה', area: 'צפון', price: '₪₪', image: '/images/photographers/catom.webp' },
-  ],
-  catering: [
-    { id: 1, name: 'קומידה', location: 'שדרות', area: 'דרום', price: '₪₪₪', image: '/images/catring/comida.webp' },
-    { id: 2, name: 'פריקאצה', location: 'באר שבע', area: 'דרום', price: '₪₪₪₪', image: '/images/catring/pricache.webp' },
-    { id: 3, name: 'הסכין והקרש', location: 'באר שבע', area: 'דרום', price: '₪₪', image: '/images/catring/asacin.webp' },
-    { id: 4, name: 'תמרים', location: 'ראשון לציון', area: 'מרכז', price: '₪₪₪', image: '/images/catring/tmarim.webp' },
-    { id: 5, name: 'המנגליסטים', location: 'רמת גן', area: 'מרכז', price: '₪₪₪₪', image: '/images/catring/amangal.webp' },
-    { id: 6, name: 'מיוחד מהמטבח', location: 'בית שמש', area: 'מרכז', price: '₪₪', image: '/images/catring/meyuhad.webp' },
-    { id: 7, name: 'מרינדה', location: 'רמת דוד', area: 'צפון', price: '₪₪₪', image: '/images/catring/marinda.webp' },
-    { id: 8, name: 'קייטרינג גדי', location: 'כפר קיש', area: 'צפון', price: '₪₪₪₪', image: '/images/catring/gadi.webp' },
-    { id: 9, name: 'קייטרינג פרידמן', location: 'מגדל העמק', area: 'צפון', price: '₪₪', image: '/images/catring/fridman.webp' },
-  ],
-  music: [
-    { id: 1, name: 'אלירן עזרן', location: 'באר שבע', area: 'דרום', price: '₪₪₪', image: '/images/dj/eliran.webp' },
-    { id: 2, name: 'MA EVENT', location: 'באר שבע', area: 'דרום', price: '₪₪₪₪', image: '/images/dj/ma.webp' },
-    { id: 3, name: 'RED MUSIC', location: 'באר שבע', area: 'דרום', price: '₪₪', image: '/images/dj/red.webp' },
-    { id: 4, name: 'רז מועלמי', location: 'חולון', area: 'מרכז', price: '₪₪₪', image: '/images/dj/raz.webp' },
-    { id: 5, name: 'ליאור אילק', location: 'ירושלים', area: 'מרכז', price: '₪₪₪₪', image: '/images/dj/lior.webp' },
-    { id: 6, name: 'שרון כהן', location: 'רמת גן', area: 'מרכז', price: '₪₪', image: '/images/dj/sharon.webp' },
-    { id: 7, name: 'איתן כרמי', location: 'טירת כרמל', area: 'צפון', price: '₪₪₪', image: '/images/dj/eitan.jpg' },
-    { id: 8, name: 'DJ DINO', location: 'נשר', area: 'צפון', price: '₪₪₪₪', image: '/images/dj/dino.webp' },
-    { id: 9, name: 'פפריקה', location: 'חיפה', area: 'צפון', price: '₪₪', image: '/images/dj/paprica.webp' },
->>>>>>> 416eca56e16b77580e32901a069673ee399481dd
+    { id: 15, name: 'שמח תשמח תקליטן דתי', location: 'קריית מלאכי', area: 'דרום', price: '₪₪₪₪', image: '/images/music/sameach.jpg',  instagram: '' },
   ],
   dresses: [
     { id: 1, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '', website: '' },
