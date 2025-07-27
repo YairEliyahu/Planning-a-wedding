@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import { Phone } from 'lucide-react';
 
 // מידע על קטגוריות הספקים - מיובא מהדף הראשי
 const serviceCategories = [
@@ -46,6 +47,14 @@ const serviceCategories = [
     icon: 'fas fa-female',
     bgColor: '#f3e5f5',
     iconColor: '#8e24aa'
+  },
+  {
+    id: 'groomSuits',
+    title: 'חליפות חתן',
+    description: 'חליפות חתן ואביזרים',
+    icon: 'fas fa-male',
+    bgColor: '#e0f7fa',
+    iconColor: '#00796b'
   },
   {
     id: 'jewelry',
@@ -156,24 +165,41 @@ const dummyVendors = {
     { id: 12, name: 'דז\'ה וו – מוזיקה ותופים (שי משולם)', location: 'אשדוד', area: 'דרום', price: '₪₪₪₪', image: '/images/music/deja.jpg',  instagram: '' },
     { id: 13, name: 'DJ דני די', location: 'באר שבע', area: 'דרום', price: '₪₪₪', image: '/images/music/danidi.jpg',  instagram: 'https://www.instagram.com/djdannydmusic' },
     { id: 14, name: 'שלומי מוסיקה והפקת אירועים', location: 'באר שבע', area: 'דרום', price: '₪₪₪₪', image: '/images/music/shlomi.jpg',  instagram: '' },
-    { id: 15, name: 'שמח תשמח תקליטן דתי', location: 'קריית מלאכי', area: 'דרום', price: '₪₪₪₪', image: '/images/music/sameach.jpg',  instagram: '' },
+    { id: 15, name: 'שמח תשמח תקליטן דתי', location: 'קריית מלאכי', area: 'דרום', price: '₪₪₪₪', image: '/images/music/sameach.jpg',  instagram: '' }
   ],
   dresses: [
-    { id: 1, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '', website: '' },
-    { id: 2, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '', website: '' },
-    { id: 3, name: '', location: 'אזור הדרום', area: 'דרום', price: '₪₪', image: '', website: '' },
-    { id: 4, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '', website: '' },
-    { id: 5, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '', website: '' },
-    { id: 6, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '', website: '' },
-    { id: 7, name: '', location: 'אזור הדרום', area: 'דרום', price: '₪₪₪', image: '', website: '' },
-    { id: 8, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '', website: '' },
-    { id: 9, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '', website: '' },
-    { id: 10, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '', website: '' },
-    { id: 11, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪', image: '', website: '' },
-    { id: 12, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '', website: '' },
-    { id: 13, name: '', location: 'אזור הדרום', area: 'דרום', price: '₪₪₪', image: '', website: '' },
-    { id: 14, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '', website: '' },
-    { id: 15, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '', website: '' }
+    { id: 1, name: 'גליה להב', location: ' תל אביב', area: 'מרכז', price: '₪₪₪', image: '/images/dresses/galia.webp', website: 'https://www.galialahav.com/?gad_source=1&gad_campaignid=22397884944&gbraid=0AAAAAD4hh5_hBxDZVtpc9IfLOyFI88mHv&gclid=Cj4KCQjwnJfEBhCzARItAIMtfKKdNIx75ndN4RWfcJmFtJVkdbJv8tG6Meeta0DoIlMi-m9wvL6I8nlIGgKe5BAC8P8HAQ' },
+    { id: 2, name: 'דרור קונטנטו', location: 'תל אביב ', area: 'מרכז', price: '₪₪₪₪', image: '/images/dresses/dror.webp', website: 'https://drorkontento.com/' },
+    { id: 3, name: 'ואדים מרגולין', location: 'תל אביב', area: 'מרכז', price: '₪₪', image: '/images/dresses/vadim.webp', website: 'https://vadimmargolin.com/' },
+    { id: 4, name: 'אלון ליבנה', location: 'תל אביב', area: 'מרכז', price: '₪₪₪', image: '/images/dresses/alon.webp', website: 'https://alonlivne.com/' },
+    { id: 5, name: 'אייזן שטיין', location: 'תל אביב יפו', area: 'מרכז', price: '₪₪₪₪', image: '/images/dresses/aizen.webp', website: 'https://eisen-stein.co.il/' },
+    { id: 6, name: 'איב רומנו', location: 'באר שבע', area: 'דרום', price: '₪₪₪₪', image: '/images/dresses/hiv.webp', website: '',phone:'0548168422' },
+    { id: 7, name: 'טלי פיטוסי', location: 'באר שבע', area: 'דרום', price: '₪₪₪', image: '/images/dresses/tali.webp', website: '',phone:'054-302-0086' },
+    { id: 8, name: 'אודליה מזרחי', location: 'ירושלים', area: 'מרכז', price: '₪₪₪₪', image: '/images/dresses/odelia.webp', website: '',phone:'052-502-2270' },
+    { id: 9, name: 'אריאלה כסלו', location: 'מודיעין', area: 'מרכז', price: '₪₪₪₪', image: '/images/dresses/ariela.webp', website: 'https://www.bridesinmodiin.co.il/' },
+    { id: 10, name: 'ישראל אוחיון', location: 'מבשרת ציון', area: 'מרכז', price: '₪₪₪', image: '/images/dresses/israel.webp', website: 'https://www.israelohayon.com/' },
+    { id: 11, name: 'יעל גולד', location: 'קריית ביאליק', area: 'צפון', price: '₪₪₪', image: '/images/dresses/yael.webp', website: 'https://www.yaelgold.com/lander' },
+    { id: 12, name: 'מיקה', location: 'קריית ביאליק', area: 'צפון', price: '₪₪₪₪', image: '/images/dresses/mika.webp', website: 'https://mikabridal.co.il/' },
+    { id: 13, name: 'יוליה ברוידה', location: 'אזור הדרום', area: 'דרום', price: '₪₪₪', image: '/images/dresses/yulia.webp', website: '' },
+    { id: 14, name: 'סטודיו נדיה', location: 'נתיבות', area: 'דרום', price: '₪₪₪₪', image: '/images/dresses/nadia.webp', website: 'https://www.studionadia.net/' },
+    { id: 15, name: 'ריקי דלאל', location: 'אשדוד', area: 'מרכז', price: '₪₪₪₪', image: '/images/dresses/riki.webp', website: 'https://www.rikidalal.co.il/' }
+  ],
+  groomSuits: [
+    { id: 1, name: 'ספוסו', location: 'באר שבע', area: 'דרום', price: '₪₪₪', image: '/images/suits/sposo.webp', website: '' ,phone:'052-262-9982'},
+    { id: 2, name: 'אלול', location: 'באר שבע', area: 'דרום', price: '₪₪₪₪', image: '/images/suits/elul.webp', website: '',phone:'052-640-5405' },
+    { id: 3, name: 'בולגריו', location: 'באר שבע', area: 'דרום', price: '₪₪', image: '/images/suits/bulgario.webp', website: 'https://bulgaryo.com/' },
+    { id: 4, name: 'אלי אזולאי', location: 'נתיבות', area: 'דרום', price: '₪₪₪', image: '/images/suits/eli.webp', website: 'https://www.eli-azulay.co.il/' },
+    { id: 5, name: 'סוטס חליפות', location: 'אשקלון', area: 'דרום', price: '₪₪₪₪', image: '/images/suits/suts.webp', website: '',phone:'050-687-2282' },
+    { id: 6, name: 'סאלינה', location: 'רמת גן', area: 'מרכז', price: '₪₪₪₪', image: '/images/suits/salina.webp', website: 'https://salina-fashion.com/?utm_source=googlemybusiness&utm_medium=organic&utm_campaign=GoogleMyBusiness' },
+    { id: 7, name: 'פנגארי', location: 'ראשון לציון', area: 'מרכז', price: '₪₪₪', image: '/images/suits/fengari.webp', website: 'https://fengari.co.il/' },
+    { id: 8, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/suits/.webp', website: '' },
+    { id: 9, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '/images/suits/.webp', website: '' },
+    { id: 10, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '/images/suits/.webp ', website: '' },
+    { id: 11, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪', image: '/images/suits/.webp', website: '' },
+    { id: 12, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/suits/.webp', website: '' },
+    { id: 13, name: '', location: 'אזור הדרום', area: 'דרום', price: '₪₪₪', image: '/images/suits/.webp', website: '' },
+    { id: 14, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪₪', image: '/images/suits/.webp', website: '' },
+    { id: 15, name: '', location: 'אזור הצפון', area: 'צפון', price: '₪₪₪₪', image: '/images/suits/.webp', website: '' }
   ],
   jewelry: [
     { id: 1, name: '', location: 'אזור המרכז', area: 'מרכז', price: '₪₪₪', image: '', website: '' },

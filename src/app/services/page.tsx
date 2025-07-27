@@ -43,10 +43,18 @@ const serviceCategories = [
   {
     id: 'dresses',
     title: 'שמלות ואופנה',
-    description: 'מעצבי שמלות כלה, חליפות חתן ואביזרים',
+    description: ' מעצבי שמלות כלה ',
     icon: 'fas fa-female',
     bgColor: '#f3e5f5',
     iconColor: '#8e24aa'
+  },
+  {
+    id: 'groomSuits',
+    title: 'חליפות חתן',
+    description: ' חליפות חתן ',
+    icon: 'fas fa-male',
+    bgColor: '#e0f7fa',
+    iconColor: '#00796b'
   },
   {
     id: 'jewelry',
