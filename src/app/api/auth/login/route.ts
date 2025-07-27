@@ -56,8 +56,10 @@ export async function POST(req: Request) {
       if (user.authProvider === 'google') {
         return NextResponse.json({ 
           success: false,
-          message: 'משתמש זה רשום באמצעות Google. אנא התחבר באמצעות Google',
-          action: 'USE_GOOGLE'
+          message: 'משתמש זה רשום באמצעות Google. ניתן להתחבר באמצעות Google או להגדיר סיסמה',
+          action: 'USE_GOOGLE_OR_SET_PASSWORD',
+          canSetPassword: true,
+          email: user.email
         }, { status: 400 });
       } else {
         return NextResponse.json({ 

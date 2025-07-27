@@ -1,0 +1,53 @@
+[
+  {
+    "invitationId": "inv_1748711183387_nebtdxsxh",
+    "userId": "677ad646a656c9c88343a470",
+    "method": "whatsapp",
+    "timestamp": "2025-05-31T17:07:14.827Z",
+    "totalGuests": 1,
+    "successfulSends": 1,
+    "results": [
+      {
+        "guestId": "guest_1748711218231",
+        "guestName": "יאיר ",
+        "success": true,
+        "messageId": "whatsapp_1748711236043",
+        "recipient": "0542023170"
+      }
+    ]
+  },
+  {
+    "invitationId": "inv_1748711183387_nebtdxsxh",
+    "userId": "677ad646a656c9c88343a470",
+    "method": "whatsapp",
+    "timestamp": "2025-05-31T17:07:35.258Z",
+    "totalGuests": 1,
+    "successfulSends": 1,
+    "results": [
+      {
+        "guestId": "guest_1748711218231",
+        "guestName": "יאיר ",
+        "success": true,
+        "messageId": "whatsapp_1748711256472",
+        "recipient": "+972542023170"
+      }
+    ]
+  },
+  {
+    "invitationId": "inv_1748711183387_nebtdxsxh",
+    "userId": "677ad646a656c9c88343a470",
+    "method": "email",
+    "timestamp": "2025-05-31T17:08:05.332Z",
+    "totalGuests": 1,
+    "successfulSends": 1,
+    "results": [
+      {
+        "guestId": "guest_1748711218231",
+        "guestName": "יאיר ",
+        "success": true,
+        "messageId": "email_1748711286333",
+        "recipient": "yaireliyahu2013@gmail.com"
+      }
+    ]
+  }
+]

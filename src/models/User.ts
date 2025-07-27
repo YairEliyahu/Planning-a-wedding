@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema({
   authProvider: {
     type: String,
     required: true,
-    enum: ['google', 'email'],
+    enum: ['google', 'email', 'hybrid'],
     default: 'email'
   },
   providerId: String,
@@ -68,6 +68,29 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['Male', 'Female', 'Other'],
     required: false,
+  },
+  partnerInvitePending: {
+    type: Boolean,
+    default: false
+  },
+  partnerInviteAccepted: {
+    type: Boolean,
+    default: false
+  },
+  
+  // Event Sharing
+  sharedEventId: {
+    type: String,
+    required: false
+  },
+  isMainEventOwner: {
+    type: Boolean,
+    default: false
+  },
+  connectedUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false
   },
   
   // Wedding Details

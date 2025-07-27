@@ -1,29 +1,181 @@
 import { NextResponse } from 'next/server';
-import connectToDatabase from '@/utils/dbConnect';
-import User from '@/models/User';
+import connectToDatabase from '../../../../utils/dbConnect';
+import User from '../../../../models/User';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
+
+// מטמון עבור נתוני משתמש - מוגדל מ-5 דקות ל-10 דקות
+const userCache = new Map<string, { data: UserDocument; timestamp: number }>();
+const CACHE_TTL = 10 * 60 * 1000; // 10 דקות
+
+// Define a type for the user document
+interface UserDocument {
+  _id: mongoose.Types.ObjectId;
+  email: string;
+  fullName: string;
+  isProfileComplete: boolean;
+  phone?: string;
+  weddingDate?: Date;
+  partnerName?: string;
+  partnerPhone?: string;
+  partnerEmail?: string;
+  expectedGuests?: string;
+  weddingLocation?: string;
+  budget?: string;
+  preferences?: {
+    venue: boolean;
+    catering: boolean;
+    photography: boolean;
+    music: boolean;
+    design: boolean;
+  };
+  updatedAt: Date;
+}
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
+    // בדיקת מטמון משופרת
+    const cachedUser = userCache.get(params.id);
+    if (cachedUser && Date.now() - cachedUser.timestamp < CACHE_TTL) {
+      return NextResponse.json({ user: cachedUser.data }, {
+        headers: {
+          'Cache-Control': 'private, max-age=600', // 10 דקות
+          'Last-Modified': new Date(cachedUser.timestamp).toUTCString()
+        }
+      });
+    }
+
+    // חיבור למסד הנתונים
     await connectToDatabase();
-    const user = await User.findById(params.id).select('-password');
+
+    const userId = params.id;
     
+    // שיפור חיפוש המשתמש עם אופטימיזציות
+    const user = await User.findById(userId)
+      .select('-password -__v') // לא נביא גם __v
+      .lean() // שימוש ב-lean() לקבלת אובייקט JavaScript רגיל
+      .exec(); // שימוש ב-exec() לביצועים טובים יותר
+
     if (!user) {
       return NextResponse.json(
-        { success: false, message: 'User not found' },
+        { message: 'User not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true, user });
+    // שמירה במטמון עם TTL
+    userCache.set(params.id, {
+      data: user as unknown as UserDocument,
+      timestamp: Date.now()
+    });
+
+    // ניקוי אוטומטי של מטמון ישן
+    setTimeout(() => {
+      const entry = userCache.get(params.id);
+      if (entry && Date.now() - entry.timestamp >= CACHE_TTL) {
+        userCache.delete(params.id);
+      }
+    }, CACHE_TTL);
+
+    return NextResponse.json({ user }, {
+      headers: {
+        'Cache-Control': 'private, max-age=600',
+        'Last-Modified': new Date().toUTCString(),
+        'ETag': `"${(user as any)._id}-${(user as any).updatedAt?.getTime() || Date.now()}"`
+      }
+    });
   } catch (error) {
     console.error('Error fetching user:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { message: 'Failed to fetch user', error: (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    await connectToDatabase();
+    const userId = params.id;
+    const userData = await request.json();
+    
+    console.log('PUT request body:', userData);
+
+    // נקה מטמון בעת עדכון
+    userCache.delete(params.id);
+
+    // Find the user
+    const user = await User.findById(userId);
+    if (!user) {
+      return NextResponse.json(
+        { message: 'User not found' },
+        { status: 404 }
+      );
+    }
+    
+    console.log('Before update - user data:', {
+      partnerName: user.partnerName,
+      partnerPhone: user.partnerPhone,
+      partnerEmail: user.partnerEmail
+    });
+    
+    // Update the user fields
+    Object.assign(user, userData);
+    await user.save();
+    
+    console.log('After update - user data:', {
+      partnerName: user.partnerName,
+      partnerPhone: user.partnerPhone,
+      partnerEmail: user.partnerEmail
+    });
+    
+    // If this user is connected to someone else, sync necessary data
+    if (user.connectedUserId) {
+      const connectedUser = await User.findById(user.connectedUserId);
+      
+      if (connectedUser) {
+        console.log('Syncing data with connected user:', connectedUser._id);
+        
+        // השדות המשותפים שצריכים להיות מסונכרנים
+        const syncFields = [
+          'weddingDate', 'expectedGuests', 'weddingLocation', 'budget', 
+          'preferences', 'venueType', 'timeOfDay', 'locationPreference'
+        ];
+        
+        // העתקת השדות המשותפים
+        syncFields.forEach(field => {
+          if (field in userData) {
+            console.log(`Syncing field ${field}:`, user[field]);
+            connectedUser[field] = user[field];
+          }
+        });
+        
+        await connectedUser.save();
+        console.log('Connected user updated successfully');
+        
+        // נקה גם את המטמון של המשתמש המחובר
+        userCache.delete(user.connectedUserId.toString());
+      }
+    }
+
+    return NextResponse.json({ 
+      message: 'User updated successfully',
+      user
+    }, {
+      headers: {
+        'Cache-Control': 'no-cache' // לא לשמור במטמון אחרי עדכון
+      }
+    });
+  } catch (error) {
+    console.error('Error updating user:', error);
+    return NextResponse.json(
+      { message: 'Failed to update user', error: (error as Error).message },
       { status: 500 }
     );
   }
@@ -35,6 +187,7 @@ export async function PATCH(
 ) {
   try {
     const body = await request.json();
+    console.log('PATCH request body:', body);
     await connectToDatabase();
 
     // עידוא שה-ID תקין
@@ -70,6 +223,12 @@ export async function PATCH(
       processedData.budget = processedData.budget.toString();
     }
 
+    console.log('Processed data for update:', {
+      partnerName: processedData.partnerName,
+      partnerPhone: processedData.partnerPhone,
+      partnerEmail: processedData.partnerEmail
+    });
+
     // עדכון המשתמש
     const updatedUser = await User.findByIdAndUpdate(
       params.id,
@@ -79,6 +238,7 @@ export async function PATCH(
           weddingDate: processedData.weddingDate,
           partnerName: processedData.partnerName,
           partnerPhone: processedData.partnerPhone,
+          partnerEmail: processedData.partnerEmail,
           expectedGuests: processedData.expectedGuests,
           weddingLocation: processedData.weddingLocation,
           budget: processedData.budget,
@@ -91,7 +251,7 @@ export async function PATCH(
         new: true,
         runValidators: true
       }
-    ).select('-password').lean();
+    ).select('-password').lean() as unknown as UserDocument;
 
     if (!updatedUser) {
       return NextResponse.json(
@@ -99,6 +259,12 @@ export async function PATCH(
         { status: 404 }
       );
     }
+
+    console.log('Updated user data:', {
+      partnerName: updatedUser.partnerName,
+      partnerPhone: updatedUser.partnerPhone,
+      partnerEmail: updatedUser.partnerEmail
+    });
 
     // יצירת טוקן חדש עם המידע המעודכן
     const token = jwt.sign(

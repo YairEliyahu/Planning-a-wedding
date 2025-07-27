@@ -1,9 +1,12 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter, Pacifico, Shrikhand, Heebo } from 'next/font/google';
-import Navbar from '../components/Navbar'; // ייבוא ה-Navbar
 import { AuthProvider } from '@/contexts/AuthContext';
+import Providers from './providers';
+
 import '@fortawesome/fontawesome-free/css/all.min.css';
+// טעינה מוקדמת של Chart.js setup
+import '@/lib/chartSetup';
 import { Toaster } from 'react-hot-toast';
 import { AnimatePresence } from 'framer-motion';
 
@@ -35,8 +38,21 @@ const heebo = Heebo({
 });
 
 export const metadata: Metadata = {
-  title: 'אפליקציית חתונה - תכננו את החתונה המושלמת',
+  title: 'Wedding Planner',
   description: 'כלי מקיף לתכנון חתונה מושלמת - נהלו את האורחים, הספקים, והתקציב שלכם בצורה קלה ואינטואיטיבית.',
+  icons: {
+    icon: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
+    shortcut: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
+    apple: 'https://cdn.jsdelivr.net/npm/simple-icons@v9/icons/pinterest.svg',
+  },
+};
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
+  userScalable: true,
+  viewportFit: 'cover',
 };
 
 export default function RootLayout({
@@ -46,40 +62,44 @@ export default function RootLayout({
 }) {
   return (
     <html lang="he" dir="rtl" className={`${inter.variable} ${pacifico.variable} ${shrikhand.variable} ${heebo.variable}`}>
-      <body style={{ margin: 0, padding: 0 }}>
-        <AuthProvider>
-          <Navbar />
-          <AnimatePresence mode="wait">
-            {children}
-          </AnimatePresence>
-          <Toaster
-            position="top-center"
-            reverseOrder={false}
-            toastOptions={{
-              duration: 5000,
-              style: {
-                fontFamily: 'var(--font-heebo)',
-                background: '#fff',
-                color: '#333',
-                boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
-                borderRadius: '8px',
-                padding: '16px',
-              },
-              success: {
-                icon: '✅',
+      <body 
+        style={{ margin: 0, padding: 0 }}
+        suppressHydrationWarning={true}
+      >
+        <Providers>
+          <AuthProvider>
+            <AnimatePresence mode="wait">
+              {children}
+            </AnimatePresence>
+            <Toaster
+              position="top-center"
+              reverseOrder={false}
+              toastOptions={{
+                duration: 5000,
                 style: {
-                  border: '1px solid #c7f9cc',
+                  fontFamily: 'var(--font-heebo)',
+                  background: '#fff',
+                  color: '#333',
+                  boxShadow: '0 3px 10px rgba(0, 0, 0, 0.1)',
+                  borderRadius: '8px',
+                  padding: '16px',
                 },
-              },
-              error: {
-                icon: '❌',
-                style: {
-                  border: '1px solid #ffccd5',
+                success: {
+                  icon: '✅',
+                  style: {
+                    border: '1px solid #c7f9cc',
+                  },
                 },
-              },
-            }}
-          />
-        </AuthProvider>
+                error: {
+                  icon: '❌',
+                  style: {
+                    border: '1px solid #ffccd5',
+                  },
+                },
+              }}
+            />
+          </AuthProvider>
+        </Providers>
       </body>
     </html>
   );

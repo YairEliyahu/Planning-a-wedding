@@ -56,7 +56,7 @@ const NavbarProfile = () => {
               href={`/user/${user._id}`} 
               style={{
                 ...styles.tab,
-                ...(isActive(`/user/${user._id}`) && !isActive('/edit') && !isActive('/wedding') && !isActive('/checklist') && !isActive('/guestlist') ? styles.activeTab : {})
+                ...(isActive(`/user/${user._id}`) && !isActive('/edit') && !isActive('/wedding') && !isActive('/checklist') && !isActive('/guestlist') && !isActive('/seating') ? styles.activeTab : {})
               }}
             >
               הפרופיל שלי
@@ -101,6 +101,16 @@ const NavbarProfile = () => {
             >
               ניהול רשימת מוזמנים
             </Link>
+
+            <Link 
+              href={`/user/${user._id}/seating`}
+              style={{
+                ...styles.tab,
+                ...(isActive('/seating') ? styles.activeTab : {})
+              }}
+            >
+              🪑 סידורי הושבה
+            </Link>
           </div>
         </div>
       </motion.nav>
@@ -110,9 +120,9 @@ const NavbarProfile = () => {
 
 const styles = {
   nav: {
-    backgroundColor: '#f8f9fa',
-    borderBottom: '1px solid #e9ecef',
-    marginTop: '60px', // מרווח מתחת ל-Navbar הראשי
+    background: 'linear-gradient(90deg, #ffe4ec 0%, #fff 60%, #ffe4ec 100%)',
+    borderBottom: '1px solid #fbcfe8',
+    marginTop: '60px',
   },
   container: {
     maxWidth: '800px',
@@ -127,22 +137,18 @@ const styles = {
   tab: {
     padding: '0.5rem 1rem',
     textDecoration: 'none',
-    color: '#666',
-    borderRadius: '4px',
+    color: '#be185d',
+    borderRadius: '999px',
     transition: 'all 0.3s ease',
     fontSize: '1rem',
     fontWeight: '500',
-    '&:hover': {
-      backgroundColor: '#0060df',
-      color: '#ffffff',
-    },
+    background: 'transparent',
+    boxShadow: 'none',
   },
   activeTab: {
-    backgroundColor: '#0070f3',
-    color: '#ffffff',
-    '&:hover': {
-      backgroundColor: '#0060df',
-    },
+    background: 'linear-gradient(90deg, #f472b6 0%, #f9a8d4 100%)',
+    color: '#fff',
+    boxShadow: '0 2px 8px 0 #fbcfe8',
   },
   loadingContainer: {
     display: 'flex',
@@ -154,16 +160,10 @@ const styles = {
   loadingDot: {
     width: '8px',
     height: '8px',
-    backgroundColor: '#0070f3',
+    backgroundColor: '#f472b6',
     borderRadius: '50%',
     animation: 'pulse 1.5s ease-in-out infinite',
     animationDelay: '0s',
-    '&:nth-of-type(2)': {
-      animationDelay: '0.3s',
-    },
-    '&:nth-of-type(3)': {
-      animationDelay: '0.6s',
-    },
   },
 };
 

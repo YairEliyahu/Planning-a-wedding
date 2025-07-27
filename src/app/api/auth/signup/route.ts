@@ -13,7 +13,8 @@ export async function POST(req: Request) {
     const body = await req.json();
     console.log('Received registration data:', {
       ...body,
-      password: body.password ? `[${body.password.length} chars]` : undefined
+      password: body.password ? `[${body.password.length} chars]` : undefined,
+      isProfileComplete: body.isProfileComplete
     });
 
     const { 
@@ -24,8 +25,26 @@ export async function POST(req: Request) {
       gender,
       location,
       phone,
-      idNumber 
+      idNumber,
+      isProfileComplete = false,
+      // Partner connection data
+      partnerName,
+      partnerEmail,
+      partnerPhone,
+      partnerIdNumber,
+      partnerGender,
+      // Wedding data from inviter
+      weddingDate,
+      expectedGuests,
+      weddingLocation,
+      budget,
+      preferences,
+      venueType,
+      timeOfDay,
+      locationPreference
     } = body;
+
+    console.log('Extracted isProfileComplete:', isProfileComplete);
 
     // בדיקת שדות חובה
     if (!email || !password || !fullName) {
@@ -64,9 +83,6 @@ export async function POST(req: Request) {
     console.log('Hashing password...');
     const hashedPassword = await bcrypt.hash(password, 10);
     console.log('Password hashed successfully');
-    console.log('Original password length:', password.length);
-    console.log('Hashed password length:', hashedPassword.length);
-    console.log('Hashed password preview:', hashedPassword.substring(0, 10) + '...');
 
     // יצירת משתמש חדש
     const user = new User({
@@ -80,17 +96,62 @@ export async function POST(req: Request) {
       idNumber,
       authProvider: 'email',
       emailVerified: false,
-      isProfileComplete: false,
+      isProfileComplete: isProfileComplete,
+      // Partner connection data
+      partnerName,
+      partnerEmail,
+      partnerPhone,
+      partnerIdNumber,
+      partnerGender,
+      // Wedding data from inviter
+      weddingDate,
+      expectedGuests,
+      weddingLocation,
+      budget,
+      preferences,
+      venueType,
+      timeOfDay,
+      locationPreference
     });
 
     console.log('Creating user with data:', {
       ...user.toObject(),
-      password: '[HIDDEN]'
+      password: '[HIDDEN]',
+      isProfileComplete: user.isProfileComplete
     });
 
     // שמירת המשתמש
     await user.save();
-    console.log('User created successfully with ID:', user._id);
+    console.log('User created successfully with ID:', user._id, 'isProfileComplete:', user.isProfileComplete);
+
+    // אם יש partnerEmail, נחפש את המשתמש המזמין ונחבר ביניהם
+    if (partnerEmail) {
+      console.log('Looking for inviter with partner email:', partnerEmail);
+      const inviter = await User.findOne({ 
+        $or: [
+          { email: partnerEmail },
+          { partnerEmail: email }
+        ]
+      });
+
+      if (inviter) {
+        console.log('Found inviter:', inviter._id);
+        
+        // יצירת sharedEventId (נשתמש ב-ID של המזמין)
+        const sharedEventId = inviter._id.toString();
+        
+        // עדכון המשתמש החדש עם sharedEventId ו-connectedUserId
+        user.sharedEventId = sharedEventId;
+        user.connectedUserId = inviter._id;
+        await user.save();
+        
+        // עדכון המזמין עם connectedUserId
+        inviter.connectedUserId = user._id;
+        await inviter.save();
+        
+        console.log('Connected users with sharedEventId:', sharedEventId);
+      }
+    }
 
     // בדיקה מיידית שהמשתמש נשמר עם הסיסמה
     const savedUser = await User.findById(user._id);
@@ -100,7 +161,8 @@ export async function POST(req: Request) {
       hasPassword: !!savedUser?.password,
       passwordLength: savedUser?.password?.length,
       authProvider: savedUser?.authProvider,
-      passwordPreview: savedUser?.password ? savedUser.password.substring(0, 10) + '...' : 'none'
+      sharedEventId: savedUser?.sharedEventId,
+      connectedUserId: savedUser?.connectedUserId
     });
 
     // בדיקת הסיסמה המוצפנת
@@ -130,6 +192,15 @@ export async function POST(req: Request) {
       { expiresIn: '7d' }
     );
 
+    console.log('Sending response with user data:', {
+      _id: user._id.toString(),
+      email: user.email,
+      fullName: user.fullName,
+      isProfileComplete: user.isProfileComplete,
+      sharedEventId: user.sharedEventId,
+      connectedUserId: user.connectedUserId
+    });
+
     return NextResponse.json(
       {
         message: 'משתמש נוצר בהצלחה',
@@ -144,6 +215,21 @@ export async function POST(req: Request) {
           phone: user.phone,
           idNumber: user.idNumber,
           isProfileComplete: user.isProfileComplete,
+          sharedEventId: user.sharedEventId,
+          connectedUserId: user.connectedUserId,
+          partnerName: user.partnerName,
+          partnerEmail: user.partnerEmail,
+          partnerPhone: user.partnerPhone,
+          partnerIdNumber: user.partnerIdNumber,
+          partnerGender: user.partnerGender,
+          weddingDate: user.weddingDate,
+          expectedGuests: user.expectedGuests,
+          weddingLocation: user.weddingLocation,
+          budget: user.budget,
+          preferences: user.preferences,
+          venueType: user.venueType,
+          timeOfDay: user.timeOfDay,
+          locationPreference: user.locationPreference
         },
       },
       { status: 201 }

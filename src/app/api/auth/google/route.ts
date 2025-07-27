@@ -1,17 +1,21 @@
 import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   console.time('google-auth-init');
   try {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+    
+    // בנייה דינמית של redirect URI מה-request URL
+    const requestUrl = new URL(request.url);
+    const redirectUri = `${requestUrl.protocol}//${requestUrl.host}/api/auth/google/callback`;
 
-    if (!clientId || !clientSecret || !redirectUri) {
+    if (!clientId || !clientSecret) {
       console.error('Missing environment variables:', {
         hasClientId: !!clientId,
-        hasClientSecret: !!clientSecret,
-        hasRedirectUri: !!redirectUri
+        hasClientSecret: !!clientSecret
       });
       console.timeEnd('google-auth-init');
       return NextResponse.redirect(new URL('/login?error=MissingGoogleConfig', request.url));

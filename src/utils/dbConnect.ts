@@ -18,15 +18,29 @@ if (!MONGODB_URI) {
 }
 
 let cached = global.mongoose;
+let listenersSet = false; // דגל למניעת הוספת listeners מרובים
 
 if (!cached) {
   cached = global.mongoose = { conn: null, promise: null };
 }
 
 async function connectToDatabase() {
-  // אם כבר יש חיבור פעיל, החזר אותו מיד
-  if (cached && cached.conn) {
+  // בדיקה משופרת לחיבור קיים - בודק גם את מצב הקריאה
+  if (cached && cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
+  }
+
+  // אם יש חיבור אבל הוא לא מוכן, נחכה לו
+  if (cached && cached.promise) {
+    try {
+      cached.conn = await cached.promise;
+      if (mongoose.connection.readyState === 1) {
+        return cached.conn;
+      }
+    } catch (error) {
+      // אם נכשל, נאפס את ההבטחה ונתחיל מחדש
+      cached.promise = null;
+    }
   }
 
   // אם אין הבטחה פעילה ליצירת חיבור, צור אחת
@@ -34,18 +48,38 @@ async function connectToDatabase() {
     const opts = {
       bufferCommands: false,
       dbName: 'WeddingApp',
-      // הוספת אופציות ביצועים
-      connectTimeoutMS: 10000, // הגבלת זמן חיבור ל-10 שניות
-      maxPoolSize: 10, // גודל פול החיבורים המקסימלי
-      minPoolSize: 5,  // גודל פול החיבורים המינימלי
-      serverSelectionTimeoutMS: 5000, // זמן המתנה לבחירת שרת
-      socketTimeoutMS: 45000, // זמן מקסימלי לשאילתות
+      // אופטימיזציה של הגדרות ביצועים - הסרת אופציות לא נתמכות
+      connectTimeoutMS: 10000, // חזרה לערך בטוח יותר
+      maxPoolSize: 10,
+      minPoolSize: 2,  
+      serverSelectionTimeoutMS: 5000, // חזרה לערך בטוח יותר
+      socketTimeoutMS: 20000,
+      maxIdleTimeMS: 30000,
+      // אופטימיזציות בסיסיות שנתמכות
+      retryWrites: true,
+      w: 'majority' as const,
+      readPreference: 'primary' as const, // שינוי ל-primary בלבד
+      // הסרת compressors שעלולים לגרום לבעיות
+      // הגדרות heartbeat בסיסיות
+      heartbeatFrequencyMS: 10000
     };
 
     console.time('mongodb-connect');
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongooseInstance) => {
+    cached.promise = mongoose.connect(MONGODB_URI!, opts as mongoose.ConnectOptions).then((mongooseInstance) => {
       console.timeEnd('mongodb-connect');
       console.log('Connected to MongoDB successfully');
+      
+      // הגדרת אופטימיזציות בסיסיות
+      mongoose.set('strictQuery', false);
+      mongoose.set('runValidators', true);
+      
+      // הגדר את מספר המאזינים המקסימלי לפני הוספת listeners
+      if (!listenersSet) {
+        mongoose.connection.setMaxListeners(20);
+        setupConnectionListeners();
+        listenersSet = true;
+      }
+      
       return mongooseInstance;
     });
   }
@@ -60,31 +94,48 @@ async function connectToDatabase() {
     if (cached) {
       cached.promise = null;
     }
+    console.error('MongoDB connection failed:', e);
     throw e;
   }
 }
 
-// אופטימיזציה של אירועי החיבור עם יותר מידע לדיבוג
-mongoose.connection.on('connected', () => {
-  console.log(`MongoDB connected to ${mongoose.connection.host}:${mongoose.connection.port}/${mongoose.connection.db?.databaseName || ''}`);
-});
+// פונקציה נפרדת להגדרת listeners (רק פעם אחת)
+function setupConnectionListeners() {
+  mongoose.connection.on('connected', () => {
+    console.log(`MongoDB connected to ${mongoose.connection.host}:${mongoose.connection.port}/${mongoose.connection.db?.databaseName || ''}`);
+  });
 
-mongoose.connection.on('error', (err) => {
-  console.error('MongoDB connection error:', err);
-});
+  mongoose.connection.on('error', (err) => {
+    console.error('MongoDB connection error:', err);
+    // איפוס הקאש במקרה של שגיאה
+    if (cached) {
+      cached.conn = null;
+      cached.promise = null;
+    }
+  });
 
-mongoose.connection.on('disconnected', () => {
-  console.log('MongoDB connection disconnected');
-});
+  mongoose.connection.on('disconnected', () => {
+    console.log('MongoDB connection disconnected');
+    // איפוס הקאש במקרה של ניתוק
+    if (cached) {
+      cached.conn = null;
+      cached.promise = null;
+    }
+  });
 
-// הוספת מאזינים לאירועים נוספים לצורך דיבוג
-mongoose.connection.on('reconnected', () => {
-  console.log('MongoDB reconnected');
-});
+  mongoose.connection.on('reconnected', () => {
+    console.log('MongoDB reconnected');
+  });
 
-mongoose.connection.on('timeout', () => {
-  console.log('MongoDB connection timeout');
-});
+  mongoose.connection.on('timeout', () => {
+    console.log('MongoDB connection timeout');
+  });
+
+  // ניטור ביצועים
+  mongoose.connection.on('slow', () => {
+    console.warn('MongoDB slow operation detected');
+  });
+}
 
 export default connectToDatabase;
 
