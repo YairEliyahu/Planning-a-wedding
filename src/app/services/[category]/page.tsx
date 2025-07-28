@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { Phone } from 'lucide-react';
+
 
 // מידע על קטגוריות הספקים - מיובא מהדף הראשי
 const serviceCategories = [
@@ -594,7 +594,7 @@ const CategoryPage: React.FC<Params> = ({ params }) => {
       )}
     </div>
   );
-}
+};
 
 const styles = {
   container: {
