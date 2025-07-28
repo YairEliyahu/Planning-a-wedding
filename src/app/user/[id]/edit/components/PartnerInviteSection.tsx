@@ -1,8 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useEditProfile } from '../context/EditProfileContext';
 import { styles } from '../styles/formStyles';
+import { validatePartnerEmail } from '../utils/validationUtils';
 
 export default function PartnerInviteSection() {
   const { 
@@ -14,6 +15,17 @@ export default function PartnerInviteSection() {
     isInviting 
   } = useEditProfile();
 
+  const [partnerEmailError, setPartnerEmailError] = useState('');
+
+  const handlePartnerEmailChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    handleChange(e);
+    
+    // Validate partner email
+    const validation = validatePartnerEmail(value);
+    setPartnerEmailError(validation.isValid ? '' : validation.message);
+  };
+
   const getButtonStyle = () => ({
     padding: '0.75rem',
     borderRadius: '4px 0 0 4px',
@@ -21,7 +33,7 @@ export default function PartnerInviteSection() {
     fontSize: '0.9rem',
     width: '150px',
     transition: 'all 0.3s ease',
-    cursor: inviteStatus === 'sending' || inviteStatus === 'accepted' || !formData.partnerEmail ? 'not-allowed' : 'pointer',
+    cursor: inviteStatus === 'sending' || inviteStatus === 'accepted' || !formData.partnerEmail || partnerEmailError ? 'not-allowed' : 'pointer',
     backgroundColor: 
       inviteStatus === 'accepted' ? '#4CAF50' :
       inviteStatus === 'sent' ? '#FFA500' : 
@@ -52,6 +64,13 @@ export default function PartnerInviteSection() {
     }
   };
 
+  const errorStyle = {
+    color: '#e53e3e',
+    fontSize: '0.875rem',
+    marginTop: '0.25rem',
+    display: 'block'
+  };
+
   return (
     <div style={styles.partnerEmailContainer}>
       <label htmlFor="partnerEmail" style={styles.label}>אימייל בן/בת הזוג</label>
@@ -61,7 +80,7 @@ export default function PartnerInviteSection() {
           type="email"
           name="partnerEmail"
           value={formData.partnerEmail}
-          onChange={handleChange}
+          onChange={handlePartnerEmailChange}
           style={{
             ...styles.input,
             borderTopRightRadius: '4px',
@@ -69,18 +88,22 @@ export default function PartnerInviteSection() {
             borderTopLeftRadius: '0',
             borderBottomLeftRadius: '0',
             borderRight: '1px solid #ddd',
-            width: 'calc(100% - 150px)'
+            width: 'calc(100% - 150px)',
+            borderColor: partnerEmailError ? '#e53e3e' : '#ddd'
           }}
         />
         <button
           type="button"
           onClick={invitePartner}
-          disabled={isInviting || inviteStatus === 'accepted' || !formData.partnerEmail}
+          disabled={isInviting || inviteStatus === 'accepted' || !formData.partnerEmail || !!partnerEmailError}
           style={getButtonStyle()}
         >
           {getButtonText()}
         </button>
       </div>
+      {partnerEmailError && (
+        <span style={errorStyle}>{partnerEmailError}</span>
+      )}
       {inviteStatus === 'sent' && (
         <p style={styles.inviteMessage}>{inviteMessage}</p>
       )}

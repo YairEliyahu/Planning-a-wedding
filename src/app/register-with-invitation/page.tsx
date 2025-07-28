@@ -2,10 +2,11 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 interface InvitationData {
   inviterId: string;
@@ -31,20 +32,33 @@ function RegisterWithInvitationContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get('token');
 
+  // Phone number validation
+  const validatePhoneNumber = (phone: string): boolean => {
+    const cleanPhone = phone.replace(/[-\s]/g, '');
+    const mobileRegex = /^05[0-9]{8}$/;
+    const landlineRegex = /^0[2-4,8-9][0-9]{7}$/;
+    return mobileRegex.test(cleanPhone) || landlineRegex.test(cleanPhone);
+  };
+
+  const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    if (/^[0-9]*$/.test(value) && value.length <= 10) {
+      setFormData(prev => ({
+        ...prev,
+        phone: value
+      }));
+    }
+  };
+
   useEffect(() => {
-    // Clear any existing auth data to prevent Navbar from showing
     if (typeof window !== 'undefined') {
       const existingToken = localStorage.getItem('token');
-      // If user is already logged in but coming to this page, we should clear their session
-      // since they're supposed to register as a new user
       if (existingToken && window.location.pathname.includes('register-with-invitation')) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        // Store just the invitation token
         if (token) {
           localStorage.setItem('invitation_token', token);
         }
-        // Force a page reload to clear any React state
         window.location.reload();
         return;
       }
@@ -68,6 +82,7 @@ function RegisterWithInvitationContent() {
         });
 
         const data = await response.json();
+        console.log('Invitation verification response:', data); // Debug log
 
         if (!response.ok) {
           setStatus('error');
@@ -75,9 +90,18 @@ function RegisterWithInvitationContent() {
           return;
         }
 
-        // Get partner details from the inviter
-        const inviterResponse = await fetch(`/api/user/${data.inviterId}`);
+        // Get partner details from the inviter - עם cache busting
+        const timestamp = Date.now();
+        const inviterResponse = await fetch(`/api/user/${data.inviterId}?_t=${timestamp}`, {
+          cache: 'no-store', // מאלץ fetch חדש
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache'
+          }
+        });
         const inviterData = await inviterResponse.json();
+        console.log('Inviter data response (with cache busting):', inviterData);
+        console.log('Full inviter user object:', inviterData.user);
 
         if (!inviterResponse.ok) {
           setStatus('error');
@@ -85,12 +109,29 @@ function RegisterWithInvitationContent() {
           return;
         }
 
+        // שליפת שם השותף ממספר מקורות אפשריים
+        const partnerName = 
+          inviterData.user?.partnerName || // השם שהמזמין הזין בפרופיל שלו
+          data.partnerName || // השם מטוקן ההזמנה (אם קיים)
+          ''; 
+
+        const partnerPhone = 
+          inviterData.user?.partnerPhone || 
+          data.partnerPhone || 
+          '';
+
+        console.log('🔍 Partner data found:');
+        console.log('  - partnerName from inviter profile:', inviterData.user?.partnerName);
+        console.log('  - partnerName from invitation token:', data.partnerName);
+        console.log('  - Final partnerName:', partnerName);
+        console.log('  - Final partnerPhone:', partnerPhone);
+
         const invitationInfo: InvitationData = {
           inviterId: data.inviterId,
           inviterName: data.inviterName,
           partnerEmail: data.partnerEmail,
-          partnerName: inviterData.user.partnerName,
-          partnerPhone: inviterData.user.partnerPhone
+          partnerName: partnerName,
+          partnerPhone: partnerPhone
         };
 
         setInvitationData(invitationInfo);
@@ -98,9 +139,11 @@ function RegisterWithInvitationContent() {
         // Pre-fill the form with the partner details
         setFormData(prev => ({
           ...prev,
-          fullName: invitationInfo.partnerName || '',
-          phone: invitationInfo.partnerPhone || ''
+          fullName: partnerName || '',
+          phone: partnerPhone || ''
         }));
+
+        console.log('Form data set with:', { fullName: partnerName, phone: partnerPhone }); // Debug log
 
         setStatus('ready');
       } catch (error) {
@@ -124,8 +167,10 @@ function RegisterWithInvitationContent() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validate form
-    if (!formData.fullName || !formData.password) {
+    // Enhanced validation - use partner name from invitation if available
+    const finalFullName = invitationData?.partnerName || formData.fullName;
+    
+    if (!finalFullName || !formData.password) {
       setError('אנא מלא את כל שדות החובה');
       return;
     }
@@ -140,11 +185,15 @@ function RegisterWithInvitationContent() {
       return;
     }
 
+    if (formData.phone && !validatePhoneNumber(formData.phone)) {
+      setError('מספר טלפון לא תקין (דוגמאות: 0501234567 או 026789012)');
+      return;
+    }
+
     setStatus('registering');
     setError('');
 
     try {
-      // Get additional data from inviter for pre-filling profile
       let inviterData = {};
       if (invitationData) {
         try {
@@ -152,7 +201,6 @@ function RegisterWithInvitationContent() {
           const inviterDetails = await inviterResponse.json();
           
           if (inviterResponse.ok && inviterDetails.user) {
-            // Pre-fill profile with inviter's wedding data
             inviterData = {
               isProfileComplete: true,
               weddingDate: inviterDetails.user.weddingDate,
@@ -172,23 +220,21 @@ function RegisterWithInvitationContent() {
           }
         } catch (err) {
           console.error('Failed to fetch inviter details:', err);
-          // Continue registration without pre-filled data
         }
       }
       
-      // Register the new user with pre-filled data
       const registerResponse = await fetch('/api/auth/signup', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          fullName: formData.fullName,
+          fullName: finalFullName,
           email: invitationData?.partnerEmail,
           password: formData.password,
           phone: formData.phone,
           isProfileComplete: true,
-          ...inviterData // Include inviter data if available
+          ...inviterData
         })
       });
 
@@ -198,7 +244,6 @@ function RegisterWithInvitationContent() {
         throw new Error(registerData.message || 'שגיאה ברישום');
       }
 
-      // Store token and user
       if (registerData.token) {
         localStorage.setItem('token', registerData.token);
         if (registerData.user) {
@@ -206,13 +251,10 @@ function RegisterWithInvitationContent() {
         }
       }
 
-      // Store invitation token for accept-invitation page
       localStorage.setItem('invitation_token', token as string);
 
-      // Success - redirect to accept invitation
       setStatus('success');
       setTimeout(() => {
-        // במקום לעבור ל-accept-invitation, נעבור ישירות לדף הבית עם הפרמטרים
         const userParam = encodeURIComponent(JSON.stringify(registerData.user));
         router.push(`/?token=${registerData.token}&user=${userParam}`);
       }, 2000);
@@ -223,157 +265,285 @@ function RegisterWithInvitationContent() {
     }
   };
 
+  if (status === 'loading') {
+    return (
+      <LoadingSpinner 
+        text="טוען את פרטי ההזמנה..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+      />
+    );
+  }
+
   return (
-    <div dir="rtl" className="min-h-screen bg-gradient-to-b from-blue-50 to-white flex flex-col items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-lg">
-        <CardHeader className="flex flex-col items-center border-b p-6">
-          <div className="w-20 h-20 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full flex items-center justify-center mb-4">
-            <span className="text-3xl text-white">💒</span>
+    <div dir="rtl" className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="min-h-screen flex flex-col items-center justify-center py-16 px-6">
+        {/* Enhanced Header */}
+        <div className="text-center mb-12 animate-fade-in-up">
+          <div className="inline-flex items-center justify-center w-24 h-24 bg-gradient-to-br from-pink-400 to-purple-600 rounded-full mb-6 shadow-xl animate-pulse-gentle">
+            <span className="text-4xl">💒</span>
           </div>
-          <CardTitle className="text-2xl font-bold text-center">רישום באמצעות הזמנה</CardTitle>
-        </CardHeader>
-        
-        <CardContent className="p-6">
-          {status === 'loading' && (
-            <div className="flex flex-col items-center justify-center py-8">
-              <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
-              <p className="mt-4 text-gray-600 text-center">{message}</p>
-            </div>
-          )}
-          
-          {status === 'error' && (
-            <div className="text-center py-8">
-              <div className="text-red-500 text-6xl mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-16 w-16 mx-auto">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h3 className="text-xl font-semibold mb-2">שגיאה באימות ההזמנה</h3>
-              <p className="text-gray-600 mb-6">{message}</p>
-              <Button onClick={() => router.push('/')}>
-                חזרה לדף הבית
-              </Button>
-            </div>
-          )}
-          
-          {(status === 'ready' || status === 'registering') && invitationData && (
-            <div>
-              <div className="bg-blue-50 p-4 rounded-md mb-6">
-                <p className="text-blue-800 font-medium">הוזמנת על ידי {invitationData.inviterName} לנהל יחד את החתונה!</p>
-                <p className="text-sm text-blue-700 mt-2">אנא השלם את הרישום כדי להתחבר לחשבון המשותף</p>
-                <p className="text-sm text-blue-700 mt-2">
-                  <strong>שים לב:</strong> הפרופיל שלך יסונכרן אוטומטית עם פרטי החתונה שהוגדרו על ידי {invitationData.inviterName}
-                  ולא תצטרך למלא אותם בנפרד.
-                </p>
-              </div>
+          <h1 className="heading-primary text-5xl mb-4 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            הצטרפות להזמנה
+          </h1>
+          <p className="text-gray-600 text-xl leading-relaxed max-w-2xl mx-auto">
+            ברוכים הבאים! ✨ נשמח לראות אתכם מצטרפים לתכנון החתונה
+          </p>
+        </div>
 
-              {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-md mb-4">
-                  {error}
+        <Card className="card-enhanced w-full max-w-2xl">
+          <CardContent className="p-10">
+            {status === 'error' && (
+              <div className="text-center py-12 animate-fade-in-up">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-red-400 to-red-600 rounded-full mb-6 shadow-lg">
+                  <span className="text-3xl text-white">⚠️</span>
                 </div>
-              )}
-              
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">שם מלא *</Label>
-                  <Input
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleChange}
-                    required
-                  />
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">שגיאה באימות ההזמנה</h3>
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6">
+                  <p className="text-red-700 leading-relaxed">{message}</p>
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">דואר אלקטרוני</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={invitationData.partnerEmail}
-                    disabled
-                    className="bg-gray-100"
-                  />
-                  <p className="text-xs text-gray-500">כתובת הדואר האלקטרוני נקבעה בהזמנה ולא ניתן לשנותה</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="phone">טלפון</Label>
-                  <Input
-                    id="phone"
-                    name="phone"
-                    type="tel"
-                    value={formData.phone}
-                    onChange={handleChange}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="password">סיסמה *</Label>
-                  <Input
-                    id="password"
-                    name="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    required
-                  />
-                  <p className="text-xs text-gray-500">הסיסמה חייבת להכיל לפחות 6 תווים</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">אימות סיסמה *</Label>
-                  <Input
-                    id="confirmPassword"
-                    name="confirmPassword"
-                    type="password"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    required
-                  />
-                </div>
-
                 <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={status === 'registering'}
+                  onClick={() => router.push('/')}
+                  className="btn-primary"
                 >
-                  {status === 'registering' ? (
-                    <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                      מבצע רישום...
-                    </>
-                  ) : (
-                    'סיום הרשמה'
-                  )}
+                  ← חזרה לדף הבית
                 </Button>
-              </form>
-            </div>
-          )}
-          
-          {status === 'success' && (
-            <div className="text-center py-8">
-              <div className="text-green-500 text-6xl mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="h-16 w-16 mx-auto">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
               </div>
-              <h3 className="text-xl font-semibold mb-2">ההרשמה הושלמה בהצלחה!</h3>
-              <p className="text-gray-600 mb-2">
-                נרשמת בהצלחה וכעת תועבר למסך חיבור החשבונות
-              </p>
-              <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            )}
+            
+            {(status === 'ready' || status === 'registering') && invitationData && (
+              <div className="animate-fade-in-up">
+                {/* Invitation Info Card */}
+                <div className="feature-card mb-8">
+                  <div className="flex items-center gap-4 mb-4">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg">
+                      <span className="text-2xl">🎉</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-blue-800 mb-1">
+                        הוזמנת על ידי {invitationData.inviterName}!
+                      </h3>
+                      <p className="text-blue-700">לנהל יחד את החתונה החלומית שלכם</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-50 rounded-xl p-6 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-blue-600">📧</span>
+                      <span className="text-blue-800 font-medium">האימייל שלך:</span>
+                      <span className="text-blue-700">{invitationData.partnerEmail}</span>
+                    </div>
+                    
+                    {!invitationData.partnerName ? (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-yellow-600">ℹ️</span>
+                          <span className="text-yellow-800 font-medium">הערה:</span>
+                        </div>
+                        <p className="text-yellow-700 text-sm leading-relaxed">
+                          {invitationData.inviterName} לא הזין/ה את השם שלך בפרופיל. 
+                          אנא הזן/י את השם שלך במטה כדי להמשיך ברישום.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <span className="text-blue-600">👤</span>
+                        <span className="text-blue-800 font-medium">השם שלך:</span>
+                        <span className="text-blue-700">{invitationData.partnerName}</span>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-start gap-2">
+                      <span className="text-blue-600 mt-1">✨</span>
+                      <div className="flex-1">
+                        <p className="text-blue-800 font-medium mb-1">מה קורה אחרי ההרשמה?</p>
+                        <p className="text-blue-700 text-sm leading-relaxed">
+                          הפרופיל שלך יסונכרן אוטומטית עם פרטי החתונה שהוגדרו על ידי {invitationData.inviterName}, 
+                          ותוכלו לנהל יחד את כל התכנון!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Registration Form */}
+                <div className="space-y-8">
+                  <div className="text-center">
+                    <h2 className="text-3xl font-bold text-gray-800 mb-2 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                      השלמת הרשמה
+                    </h2>
+                    <p className="text-gray-600">אנא השלימו את הפרטים הבאים להשלמת התהליך</p>
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <Label htmlFor="fullName" className="form-label-enhanced">
+                          <span className="text-red-500">*</span>
+                          <span>👤 שם מלא</span>
+                        </Label>
+                        <Input
+                          id="fullName"
+                          name="fullName"
+                          value={invitationData?.partnerName || formData.fullName}
+                          onChange={handleChange}
+                          disabled={!!invitationData?.partnerName}
+                          className={`form-input-enhanced ${
+                            invitationData?.partnerName ? 'bg-gray-50 cursor-not-allowed' : ''
+                          }`}
+                          placeholder={
+                            invitationData?.partnerName 
+                              ? '' 
+                              : 'הזן את שמך המלא'
+                          }
+                          required={true}
+                        />
+                        {invitationData?.partnerName ? (
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <span>🔒</span>
+                            השם נקבע על ידי {invitationData.inviterName} ולא ניתן לשנותו
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500 flex items-center gap-1">
+                            <span>✏️</span>
+                            הזן את השם שלך כפי שתרצה שיופיע במערכת
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label htmlFor="email" className="form-label-enhanced">
+                          <span>📧 דואר אלקטרוני</span>
+                        </Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={invitationData.partnerEmail}
+                          disabled
+                          className="form-input-enhanced bg-gray-50 cursor-not-allowed"
+                        />
+                        <p className="text-xs text-gray-500 flex items-center gap-1">
+                          <span>🔒</span>
+                          כתובת הדואר האלקטרוני נקבעה בהזמנה ולא ניתן לשנותה
+                        </p>
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label htmlFor="phone" className="form-label-enhanced">
+                          <span>📱 מספר טלפון</span>
+                        </Label>
+                        <Input
+                          id="phone"
+                          name="phone"
+                          type="tel"
+                          value={formData.phone}
+                          onChange={handlePhoneNumberChange}
+                          className="form-input-enhanced"
+                          placeholder="0xxxxxxxxx"
+                        />
+                      </div>
+
+                      <div className="space-y-3">
+                        <Label htmlFor="password" className="form-label-enhanced">
+                          <span className="text-red-500">*</span>
+                          <span>🔐 סיסמה</span>
+                        </Label>
+                        <Input
+                          id="password"
+                          name="password"
+                          type="password"
+                          value={formData.password}
+                          onChange={handleChange}
+                          className="form-input-enhanced"
+                          placeholder="לפחות 6 תווים"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-3 md:col-span-2">
+                        <Label htmlFor="confirmPassword" className="form-label-enhanced">
+                          <span className="text-red-500">*</span>
+                          <span>🔐 אימות סיסמה</span>
+                        </Label>
+                        <Input
+                          id="confirmPassword"
+                          name="confirmPassword"
+                          type="password"
+                          value={formData.confirmPassword}
+                          onChange={handleChange}
+                          className="form-input-enhanced"
+                          placeholder="הזן שוב את הסיסמה"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      disabled={status === 'registering'}
+                      className="btn-primary w-full text-lg py-4 flex items-center justify-center gap-3"
+                    >
+                      {status === 'registering' ? (
+                        <>
+                          <div className="animate-spin rounded-full h-5 w-5 border-2 border-white border-t-transparent"></div>
+                          מבצע רישום...
+                        </>
+                      ) : (
+                        <>
+                          ✅ סיום הרשמה והצטרפות
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                </div>
+              </div>
+            )}
+            
+            {status === 'success' && (
+              <div className="text-center py-12 animate-fade-in-up">
+                <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-green-400 to-green-600 rounded-full mb-6 shadow-lg">
+                  <span className="text-3xl text-white">✅</span>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-800 mb-4">ההרשמה הושלמה בהצלחה!</h3>
+                <div className="feature-card mb-6">
+                  <p className="text-gray-700 leading-relaxed mb-3">
+                    🎉 נרשמת בהצלחה לחשבון המשותף!
+                  </p>
+                  <p className="text-gray-600 text-sm">
+                    מעבירים אותך עכשיו לדף הבית שלכם...
+                  </p>
+                </div>
+                <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {error && (
+              <div className="error-message-enhanced animate-fade-in-up mt-6">
+                <div className="flex items-center justify-center gap-3">
+                  <span className="text-xl">⚠️</span>
+                  <span className="font-medium">{error}</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
 
 export default function RegisterWithInvitationPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={
+      <LoadingSpinner 
+        text="טוען..." 
+        size="large"
+        fullScreen={true}
+        color="pink"
+      />
+    }>
       <RegisterWithInvitationContent />
     </Suspense>
   );

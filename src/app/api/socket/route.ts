@@ -20,7 +20,11 @@ export async function POST(_req: NextRequest) {
 // Initialize Socket.IO server
 let io: SocketIOServer;
 
-if (!(global as any).io && process.env.NODE_ENV !== 'production') {
+interface GlobalType {
+  io?: SocketIOServer;
+}
+
+if (!(global as GlobalType).io && process.env.NODE_ENV !== 'production') {
   try {
     const port = parseInt(process.env.SOCKET_PORT || '3001');
     io = new SocketIOServer(port, {
@@ -31,7 +35,7 @@ if (!(global as any).io && process.env.NODE_ENV !== 'production') {
     transports: ['websocket', 'polling']
   });
 
-  (global as any).io = io;
+  (global as GlobalType).io = io;
 
   io.on('connection', (socket) => {
     const { userId, sharedEventId } = socket.handshake.query;

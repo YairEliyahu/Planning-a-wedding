@@ -1,12 +1,40 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useEditProfile } from '../context/EditProfileContext';
 import { styles } from '../styles/formStyles';
 import PartnerInviteSection from './PartnerInviteSection';
+import { validatePartnerName, validatePartnerPhone } from '../utils/validationUtils';
 
 export default function WeddingDetailsSection() {
   const { formData, handleChange } = useEditProfile();
+  const [partnerNameError, setPartnerNameError] = useState('');
+  const [partnerPhoneError, setPartnerPhoneError] = useState('');
+
+  const handlePartnerNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    handleChange(e);
+    
+    // Validate partner name
+    const validation = validatePartnerName(value);
+    setPartnerNameError(validation.isValid ? '' : validation.message);
+  };
+
+  const handlePartnerPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    handleChange(e);
+    
+    // Validate partner phone
+    const validation = validatePartnerPhone(value);
+    setPartnerPhoneError(validation.isValid ? '' : validation.message);
+  };
+
+  const errorStyle = {
+    color: '#e53e3e',
+    fontSize: '0.875rem',
+    marginTop: '0.25rem',
+    display: 'block'
+  };
 
   return (
     <div style={styles.section}>
@@ -77,9 +105,15 @@ export default function WeddingDetailsSection() {
           type="text"
           name="partnerName"
           value={formData.partnerName}
-          onChange={handleChange}
-          style={styles.input}
+          onChange={handlePartnerNameChange}
+          style={{
+            ...styles.input,
+            borderColor: partnerNameError ? '#e53e3e' : styles.input.borderColor
+          }}
         />
+        {partnerNameError && (
+          <span style={errorStyle}>{partnerNameError}</span>
+        )}
       </div>
 
       <div style={styles.fieldContainer}>
@@ -89,9 +123,15 @@ export default function WeddingDetailsSection() {
           type="tel"
           name="partnerPhone"
           value={formData.partnerPhone}
-          onChange={handleChange}
-          style={styles.input}
+          onChange={handlePartnerPhoneChange}
+          style={{
+            ...styles.input,
+            borderColor: partnerPhoneError ? '#e53e3e' : styles.input.borderColor
+          }}
         />
+        {partnerPhoneError && (
+          <span style={errorStyle}>{partnerPhoneError}</span>
+        )}
       </div>
 
       <div style={styles.fieldContainer}>

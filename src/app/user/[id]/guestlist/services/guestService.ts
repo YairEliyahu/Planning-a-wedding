@@ -191,6 +191,7 @@ class GuestService {
             header: 'A'
           });
           
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const filteredRows = rows.filter((row: any) => {
             const isHeader = Object.values(row).some(val => 
               typeof val === 'string' && 
@@ -227,6 +228,7 @@ class GuestService {
             const row = filteredRows[i];
             
             try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const processed = this.processExcelRow(row as Record<string, any>, userId, sharedEventId);
               
               if (!processed) {
@@ -284,6 +286,7 @@ class GuestService {
     });
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private processExcelRow(row: Record<string, any>, userId: string, sharedEventId?: string): NewGuest & { userId: string } | null {
     const columnKeys = Object.keys(row);
     
@@ -457,69 +460,13 @@ class GuestService {
   }
 
   downloadTemplate(): void {
-    const templateData = [
-      {
-        'שם': 'ישראל ישראלי',
-        'טלפון': '050-1234567',
-        'מספר אורחים': 2,
-        'צד': 'חתן',
-        'קבוצה': 'משפחה',
-        'אישור הגעה': '',
-        'הערות': 'דוגמה להערה'
-      },
-      {
-        'שם': 'שרה לוי',
-        'טלפון': '052-9876543',
-        'מספר אורחים': 1,
-        'צד': 'כלה',
-        'קבוצה': 'חברים',
-        'אישור הגעה': '',
-        'הערות': ''
-      },
-      {
-        'שם': 'משפחת כהן',
-        'טלפון': '054-5551234',
-        'מספר אורחים': 4,
-        'צד': 'משותף',
-        'קבוצה': 'עבודה',
-        'אישור הגעה': '',
-        'הערות': 'חברים משותפים'
-      },
-      {
-        'שם': 'זוג רוזנברג',
-        'טלפון': '053-1112233',
-        'מספר אורחים': 'זוג',
-        'צד': 'חתן',
-        'קבוצה': 'שכונה',
-        'אישור הגעה': '',
-        'הערות': 'דוגמה לזוג'
-      }
-    ];
-
-    const ws = XLSX.utils.json_to_sheet(templateData);
-
-    XLSX.utils.sheet_add_aoa(ws, [
-      ['תבנית לייבוא רשימת אורחים'],
-      ['הוראות:'],
-      ['1. מלא את הפרטים בטבלה מתחת לכותרות'],
-      ['2. עמודת "שם" היא חובה, שאר העמודות אופציונליות'],
-      ['3. עבור "צד" ניתן לרשום: חתן, כלה, או משותף'],
-      ['4. עבור "מספר אורחים" ניתן לרשום: מספר (1,2,3...), "זוג", "משפחה", "יחיד"'],
-      ['5. עבור "קבוצה" ניתן לרשום: משפחה, עבודה, חברים, צבא, לימודים, שכונה'],
-      ['6. עבור "אישור הגעה" ניתן לרשום: כן, לא, או להשאיר ריק'],
-      ['']
-    ], { origin: 'A1' });
-
-    const wscols = [
-      { wch: 20 }, { wch: 15 }, { wch: 12 }, { wch: 10 }, 
-      { wch: 12 }, { wch: 10 }, { wch: 30 }
-    ];
-    ws['!cols'] = wscols;
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'רשימת אורחים');
-
-    XLSX.writeFile(wb, 'תבנית_רשימת_אורחים.xlsx');
+    // Create a link element to download the existing template file
+    const link = document.createElement('a');
+    link.href = '/guest-template.xlsx';
+    link.download = 'תבנית_רשימת_אורחים.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 }
 

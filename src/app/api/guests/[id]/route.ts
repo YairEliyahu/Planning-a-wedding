@@ -3,13 +3,15 @@ import dbConnect from '@/utils/dbConnect';
 import Guest from '@/models/Guest';
 import mongoose from 'mongoose';
 
-// Import the cache from the main route file
-const guestsCache = new Map<string, {
-  data: any[];
+interface GuestCacheData {
+  data: unknown[];
   timestamp: number;
   etag: string;
   count: number;
-}>();
+}
+
+// Import the cache from the main route file
+const guestsCache = new Map<string, GuestCacheData>();
 
 // Helper function to clear cache for a user
 function clearUserCache(userId: string, sharedEventId?: string) {

@@ -29,6 +29,7 @@ interface UserDocument {
     music: boolean;
     design: boolean;
   };
+  connectedUserId?: mongoose.Types.ObjectId;
   updatedAt: Date;
 }
 
@@ -125,8 +126,36 @@ export async function PUT(
       partnerEmail: user.partnerEmail
     });
     
+    // Clean up empty partner fields to avoid validation errors
+    const cleanedUserData = { ...userData };
+    
+    // If partnerGender is empty string, don't include it (to avoid enum validation error)
+    if (cleanedUserData.partnerGender === '') {
+      delete cleanedUserData.partnerGender;
+    }
+    
+    // If no partner details provided, clear partner fields
+    const hasPartnerDetails = cleanedUserData.partnerName || 
+                             cleanedUserData.partnerEmail || 
+                             cleanedUserData.partnerPhone || 
+                             cleanedUserData.partnerIdNumber;
+    
+    if (!hasPartnerDetails && 
+        (cleanedUserData.partnerName === '' || 
+         cleanedUserData.partnerEmail === '' || 
+         cleanedUserData.partnerPhone === '' || 
+         cleanedUserData.partnerIdNumber === '' || 
+         cleanedUserData.partnerGender === '')) {
+      // Clear all partner fields if they're empty
+      cleanedUserData.partnerName = undefined;
+      cleanedUserData.partnerEmail = undefined;
+      cleanedUserData.partnerPhone = undefined;
+      cleanedUserData.partnerIdNumber = undefined;
+      cleanedUserData.partnerGender = undefined;
+    }
+    
     // Update the user fields
-    Object.assign(user, userData);
+    Object.assign(user, cleanedUserData);
     await user.save();
     
     console.log('After update - user data:', {
@@ -189,6 +218,9 @@ export async function PATCH(
     const body = await request.json();
     console.log('PATCH request body:', body);
     await connectToDatabase();
+
+    // נקה מטמון של המשתמש הנוכחי
+    userCache.delete(params.id);
 
     // עידוא שה-ID תקין
     if (!params.id || !mongoose.Types.ObjectId.isValid(params.id)) {
@@ -260,10 +292,17 @@ export async function PATCH(
       );
     }
 
-    console.log('Updated user data:', {
-      partnerName: updatedUser.partnerName,
-      partnerPhone: updatedUser.partnerPhone,
-      partnerEmail: updatedUser.partnerEmail
+    console.log('Updated user data - partnerName:', updatedUser.partnerName);
+
+    // נקה מטמון של כל המשתמשים הקשורים (במקרה של שיתוף)
+    if (updatedUser.connectedUserId) {
+      userCache.delete(updatedUser.connectedUserId.toString());
+    }
+    
+    // מצא משתמשים שמחוברים למשתמש הזה
+    const connectedUsers = await User.find({ connectedUserId: params.id }).select('_id');
+    connectedUsers.forEach(user => {
+      userCache.delete(user._id.toString());
     });
 
     // יצירת טוקן חדש עם המידע המעודכן

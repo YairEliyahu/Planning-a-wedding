@@ -3,15 +3,18 @@ import { Table, SeatingArrangement } from '@/models/Table';
 import User from '@/models/User';
 import connectToDatabase from '@/utils/dbConnect';
 
-// מטמון עבור סידורי הושבה
-const seatingCache = new Map<string, { 
-  data: any; 
-  timestamp: number; 
+interface SeatingCacheData {
+  data: unknown;
+  timestamp: number;
   etag: string;
-}>();
+}
+
+// מטמון עבור סידורי הושבה
+const seatingCache = new Map<string, SeatingCacheData>();
 const CACHE_TTL = 3 * 60 * 1000; // 3 דקות
 
 // פונקציה ליצירת ETag
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function generateSeatingETag(arrangement: any, tables: any[]): string {
   const arrangeUpdated = arrangement?.updatedAt?.getTime() || 0;
   const tablesUpdated = tables.length > 0 ? 
@@ -66,11 +69,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const effectiveEventId = (user as any).sharedEventId || eventId;
     console.log('[SEATING API] Using eventId:', effectiveEventId);
 
     // Build queries
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const baseQuery: any = { isActive: true };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const arrangementQuery: any = { ...baseQuery, isDefault: true };
     
     if (effectiveEventId) {

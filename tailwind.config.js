@@ -49,15 +49,11 @@ module.exports = {
     },
     extend: {
       fontFamily: {
-        sans: ['var(--font-sans)', ...fontFamily.sans],
+        sans: ['Heebo', 'Assistant', 'sans-serif'],
+        heebo: ['Heebo', 'sans-serif'],
+        rubik: ['Rubik', 'sans-serif'],
+        assistant: ['Assistant', 'sans-serif'],
         inter: ['Inter', 'sans-serif'],
-        playfair: ['Playfair Display', 'serif'],
-        crimson: ['Crimson Text', 'serif'],
-        montserrat: ['Montserrat', 'sans-serif'],
-        dancing: ['Dancing Script', 'cursive'],
-        libre: ['Libre Baskerville', 'serif'],
-        cormorant: ['Cormorant Garamond', 'serif'],
-        heebo: ['Assistant', 'sans-serif'],
       },
       fontSize: {
         'hero-mobile': ['2rem', { lineHeight: '1.2' }],
@@ -291,8 +287,8 @@ module.exports = {
         '.will-change-auto': {
           willChange: 'auto',
         },
-      }
-      addUtilities(newUtilities)
+      };
+      addUtilities(newUtilities);
     }
   ],
 };

@@ -20,7 +20,7 @@ export default function WalletCard({ walletInfo }: WalletCardProps) {
           <div className="p-4 bg-gradient-to-r from-pink-50 to-rose-50 rounded-xl border border-pink-200/50 shadow-sm hover:shadow-md transition-all duration-300">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 font-medium">תקציב כולל</p>
+                <p className="text-sm text-gray-600 font-medium">תקציב כולל (נגזר מ-checklist)</p>
                 <p className="text-xl sm:text-2xl font-bold text-pink-700">₪{walletInfo.totalBudget.toLocaleString()}</p>
               </div>
               <div className="text-2xl">💰</div>
@@ -49,13 +49,13 @@ export default function WalletCard({ walletInfo }: WalletCardProps) {
         <div className="w-full bg-pink-100 rounded-full h-4 mb-4 shadow-inner">
           <div 
             className="bg-gradient-to-r from-pink-400 via-rose-500 to-pink-600 h-4 rounded-full transition-all duration-500 shadow-sm"
-            style={{ width: `${Math.min((walletInfo.spentBudget / walletInfo.totalBudget) * 100, 100)}%` }}
+            style={{ width: `${walletInfo.totalBudget > 0 ? Math.min((walletInfo.spentBudget / walletInfo.totalBudget) * 100, 100) : 0}%` }}
           ></div>
         </div>
       
         <div className="text-center">
           <p className="text-sm font-medium text-gray-600">
-            {Math.round((walletInfo.spentBudget / walletInfo.totalBudget) * 100)}% מהתקציב נוצל
+            {walletInfo.totalBudget > 0 ? Math.round((walletInfo.spentBudget / walletInfo.totalBudget) * 100) : 0}% מהתקציב נוצל
           </p>
         </div>
       </div>

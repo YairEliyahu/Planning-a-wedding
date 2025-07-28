@@ -6,6 +6,7 @@ import { useSync } from '@/contexts/SyncContext';
 import { UserProfile, ProfileFormData, InviteStatus } from '../types/profile';
 import profileService from '../services/profileService';
 import { useAuth } from '@/contexts/AuthContext';
+import { validatePartnerFields } from '../utils/validationUtils';
 
 interface EditProfileContextType {
   // Query data
@@ -187,6 +188,32 @@ export function EditProfileProvider({ children, userId }: EditProfileProviderPro
   const updateProfile = () => {
     setErrorMessage('');
     setSuccessMessage('');
+    
+    // Validate user phone number
+    if (formData.phone) {
+      const userPhoneValidation = validatePartnerFields({
+        partnerPhone: formData.phone
+      });
+      
+      if (!userPhoneValidation.isValid) {
+        const userPhoneError = userPhoneValidation.errors[0].replace('בן/בת הזוג', 'המשתמש');
+        setErrorMessage(`שגיאה בטלפון המשתמש: ${userPhoneError}`);
+        return;
+      }
+    }
+    
+    // Validate partner fields before saving
+    const partnerValidation = validatePartnerFields({
+      partnerName: formData.partnerName,
+      partnerPhone: formData.partnerPhone,
+      partnerEmail: formData.partnerEmail
+    });
+    
+    if (!partnerValidation.isValid) {
+      setErrorMessage(`נמצאו שגיאות בפרטי בן/בת הזוג: ${partnerValidation.errors.join(', ')}`);
+      return;
+    }
+    
     updateProfileMutation.mutate(formData);
   };
 
@@ -195,6 +222,17 @@ export function EditProfileProvider({ children, userId }: EditProfileProviderPro
       setErrorMessage('אנא הזן את כתובת האימייל של בן/בת הזוג');
       return;
     }
+    
+    // Validate partner email before sending invitation
+    const emailValidation = validatePartnerFields({
+      partnerEmail: formData.partnerEmail
+    });
+    
+    if (!emailValidation.isValid) {
+      setErrorMessage(`שגיאה במייל בן/בת הזוג: ${emailValidation.errors.join(', ')}`);
+      return;
+    }
+    
     invitePartnerMutation.mutate();
   };
 
