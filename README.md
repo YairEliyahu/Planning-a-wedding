@@ -187,7 +187,7 @@ Include tests where relevant
 Follow existing design & code conventions
 
 Ensure accessibility compliance
-
+###
 👤 Authors
 <table> <tr> <td align="center"> <a href="#"> <img src="https://via.placeholder.com/100x100/FF69B4/FFFFFF?text=YE" width="100px" alt="Yair Eliyahu"/> <br /><sub><b>Yair Eliyahu</b></sub> </a> <br /> 💻 🏗️ 🎨 </td> <td align="center"> <a href="#"> <img src="https://via.placeholder.com/100x100/4169E1/FFFFFF?text=LM" width="100px" alt="Liav Maman"/> <br /><sub><b>Liav Maman</b></sub> </a> <br /> 💻 ⚡ 🗄️ </td> </tr> </table>
 <div align="center"> <strong>💕 Built with love to simplify wedding planning 💕</strong><br /> <br /> <img src="https://img.shields.io/badge/Made%20with-❤️-red?style=for-the-badge" /> <img src="https://img.shields.io/badge/For-Weddings-pink?style=for-the-badge" /> <img src="https://img.shields.io/badge/Open-Source-green?style=for-the-badge" /> </div> ```
