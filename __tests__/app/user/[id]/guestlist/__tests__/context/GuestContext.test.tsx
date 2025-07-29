@@ -31,6 +31,16 @@ jest.mock('@/contexts/AuthContext', () => ({
   }),
 }));
 
+// Mock Sync Context
+jest.mock('@/contexts/SyncContext', () => ({
+  useSync: () => ({
+    emitUpdate: jest.fn(),
+    isConnected: true,
+    lastSync: null,
+  }),
+  SyncProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
 // Import the mocked service
 import { guestService } from '@/app/user/[id]/guestlist/services/guestService';
 const mockGuestService = guestService as jest.Mocked<typeof guestService>;
@@ -113,21 +123,20 @@ describe('GuestContext', () => {
 
     it('should handle fetch error', async () => {
       const errorMessage = 'Failed to fetch';
-      mockGuestService.fetchGuests.mockRejectedValueOnce(new Error(errorMessage));
+      // Mock the error multiple times because React Query retries 3 times
+      mockGuestService.fetchGuests.mockRejectedValue(new Error(errorMessage));
 
       const { result } = renderHook(() => useGuests(), {
         wrapper: createWrapper(queryClient),
       });
 
       await waitFor(() => {
-        if (result.current.isLoading !== false) {
-          throw new Error('Expected isLoading to be false');
-        }
-      });
+        expect(result.current.isLoading).toBe(false);
+      }, { timeout: 10000 });
 
-      if (result.current.error !== errorMessage) {
-        throw new Error(`Expected error to be ${errorMessage}`);
-      }
+      await waitFor(() => {
+        expect(result.current.error).toBe(errorMessage);
+      }, { timeout: 5000 });
     });
   });
 
