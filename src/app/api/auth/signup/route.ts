@@ -90,7 +90,7 @@ export async function POST(req: Request) {
       password: hashedPassword,
       fullName,
       age: age ? Number(age) : undefined,
-      gender,
+      gender: gender || undefined, // Fix: Don't send empty string for enum field
       location,
       phone,
       idNumber,
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
       partnerEmail,
       partnerPhone,
       partnerIdNumber,
-      partnerGender,
+      partnerGender: partnerGender || undefined, // Fix: Don't send empty string for enum field
       // Wedding data from inviter
       weddingDate,
       expectedGuests,
